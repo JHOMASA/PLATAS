@@ -1363,7 +1363,11 @@ def main():
             # Visualization section
             if st.session_state.simulations:
                 st.subheader("📊 Simulation Visualization")
-                st.selectbox(..., key="sim_smoothing_tab")
+                smoothing_method = st.selectbox(
+                "Select smoothing method",
+                ["raw", "ma", "wma", "ema", "savgol", "cma"],
+                key="sim_smoothing_tab"
+                )
                 selected_data = st.session_state.simulations.get(smoothing_method)
 
                 if selected_data is not None:
