@@ -916,9 +916,9 @@ def display_stock_analysis(stock_data, ticker):
 
 
 def display_monte_carlo(simulations):
-    st.subheader("Simulation Smoothing Options")
+    st.subheader("📊 Simulation Smoothing Options")
 
-    # Option selector
+    # UI selector
     smooth_type = st.radio("Select smoothing type", [
         "Raw",
         "Moving Average",
@@ -928,7 +928,7 @@ def display_monte_carlo(simulations):
         "Cumulative MA"
     ], horizontal=True)
 
-    # Mapping from display name to simulation key
+    # Map label to key
     key_map = {
         "Raw": "raw",
         "Moving Average": "ma",
@@ -941,18 +941,21 @@ def display_monte_carlo(simulations):
     selected_key = key_map.get(smooth_type, "raw")
     data = simulations.get(selected_key)
 
-    # Data validation and fallback
-    if data is None or data.shape[1] == 0 or np.isnan(data).all():
-        st.warning(f"No valid data for {smooth_type}. Falling back to Raw.")
+    # Validate the selected smoothing data
+    if data is None or data.shape[1] == 0 or np.isnan(data).all() or np.all(data == 0):
+        st.error(f"❌ Data for '{smooth_type}' is invalid or empty (NaNs or all zeros).")
+        st.warning("Falling back to Raw simulation data for preview.")
         data = simulations['raw']
         smooth_type = "Raw"
+    else:
+        st.success(f"✅ Data loaded successfully for: **{smooth_type}**")
 
-    # Diagnostics
-    st.caption(f"Showing: **{smooth_type}**")
+    # Diagnostic preview
+    st.caption("ℹ️ Simulation Diagnostic")
     st.write("Shape:", data.shape)
-    st.write("Sample (first 5 days, 1st path):", data[:5, 0])
+    st.write("Sample values (first 5 days, first simulation):", data[:5, 0])
 
-    # Plotting
+    # ==== Simulation Paths ====
     col1, col2 = st.columns(2)
 
     with col1:
@@ -972,6 +975,7 @@ def display_monte_carlo(simulations):
         )
         st.plotly_chart(fig1, use_container_width=True)
 
+    # ==== Terminal Price Distribution ====
     with col2:
         terminal_prices = data[-1, :]
         fig2 = go.Figure()
@@ -983,11 +987,12 @@ def display_monte_carlo(simulations):
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # Risk Metrics Comparison
-    st.subheader("📊 Risk Metrics Comparison")
+    # ==== Risk Metrics ====
+    st.subheader("📈 Risk Metrics Comparison")
+
     metrics = []
     for name, sim_data in simulations.items():
-        if sim_data.shape[1] == 0 or np.isnan(sim_data).all():
+        if sim_data is None or sim_data.shape[1] == 0 or np.isnan(sim_data).all():
             continue
         tp = sim_data[-1, :]
         metrics.append({
@@ -998,7 +1003,10 @@ def display_monte_carlo(simulations):
             'Volatility': f"{tp.std()/tp.mean()*100:.2f}%"
         })
 
-    st.table(pd.DataFrame(metrics))
+    if metrics:
+        st.table(pd.DataFrame(metrics))
+    else:
+        st.warning("No valid risk metrics available from simulations.")
 
 
 
