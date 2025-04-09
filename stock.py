@@ -952,26 +952,7 @@ def display_monte_carlo(simulations: dict, smoothing_method: str):
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # Risk Metrics Table
-    st.subheader("📊 Risk Metrics Comparison")
-
-    metrics = []
-    for name, sim_data in simulations.items():
-        if sim_data is None or sim_data.shape[1] == 0:
-            continue
-        tp = sim_data[-1, :]
-        metrics.append({
-            'Type': name.upper(),
-            '5% VaR': f"${np.percentile(tp, 5):.2f}",
-            '1% VaR': f"${np.percentile(tp, 1):.2f}",
-            'Expected Value': f"${tp.mean():.2f}",
-            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%" if tp.mean() != 0 else "N/A"
-        })
-
-    if metrics:
-        st.table(pd.DataFrame(metrics))
-    else:
-        st.warning("No valid simulation data for risk metrics.")
+    
 
 
 
@@ -1333,6 +1314,7 @@ def main():
 
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
+                    
             
             # Allow visualization if simulations exist
             if st.session_state.simulations:
