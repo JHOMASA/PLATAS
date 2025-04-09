@@ -1244,11 +1244,25 @@ def main():
             st.header("🎲 Monte Carlo Simulation")
             n_simulations = st.slider("Number of Simulations", 100, 5000, 1000)
             time_horizon = st.slider("Time Horizon (days)", 30, 365, 180)
-            
+
             if st.button("Run Simulation"):
                 try:
                     simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
+
+                    # ✅ Diagnostic: Show which keys exist and their properties
+                    st.subheader("🧪 Simulation Output Check")
+                    for key in ['raw', 'ma', 'wma', 'ema', 'savgol', 'cma']:
+                        arr = simulations.get(key)
+                        if arr is None:
+                            st.error(f"❌ Key '{key}' is missing from simulation output!")
+                        else:
+                            st.success(
+                                f"✅ {key.upper()} → shape: {arr.shape}, NaNs: {np.isnan(arr).sum()}, Zeros: {np.sum(arr == 0)}"
+                            )
+
+                    # Now display the Monte Carlo interface
                     display_monte_carlo(simulations)
+
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
         
