@@ -896,7 +896,7 @@ def display_monte_carlo(simulations):
     if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
-        # Plot raw paths - FIXED PARENTHESES HERE
+        # Plot raw paths
         for i in range(min(5, simulations['raw'].shape[1])):
             fig_debug.add_trace(go.Scatter(
                 x=np.arange(simulations['raw'].shape[0]),
@@ -915,7 +915,7 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'MA {i+1}',
                     line=dict(color='green', width=1)
-                )
+                ))
         
         # Plot WMA paths if available
         if 'wma' in simulations:
@@ -939,6 +939,7 @@ def display_monte_carlo(simulations):
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
+
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
     """
