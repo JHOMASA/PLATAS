@@ -1386,11 +1386,10 @@ def main():
                         yaxis_title="Frequency",
                         bargap=0.05
                     )
-                    st.plotly_chart(fig2, use_container_width=True)    
-                    # TIR Distribution
+                    st.plotly_chart(fig2, use_container_width=True)
+
+                    # 📈 TIR Distribution
                     st.markdown("### 📈 Total Investment Return (TIR) Distribution")
-                    initial_prices = selected_data[0, :]
-                    tir_array = (terminal_prices - initial_prices) / initial_prices
                     fig3 = go.Figure()
                     fig3.add_trace(go.Histogram(x=tir_array * 100, name="TIR (%)"))
                     fig3.update_layout(
@@ -1401,7 +1400,7 @@ def main():
                     )
                     st.plotly_chart(fig3, use_container_width=True)
 
-                    # Summary Table
+                    # 📊 Summary Table
                     st.markdown("### 📊 Monte Carlo Summary Metrics")
                     df_summary = pd.DataFrame([{
                         "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
@@ -1417,7 +1416,7 @@ def main():
                     st.dataframe(df_summary, use_container_width=True)
 
                 else:
-                    st.warning("No data available for selected smoothing method.")        
+                    st.warning("No data available for selected smoothing method.") 
             
             # Allow visualization if simulations exist
             if st.session_state.simulations:
