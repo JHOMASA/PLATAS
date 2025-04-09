@@ -869,21 +869,25 @@ def display_stock_analysis(stock_data, ticker):
         st.plotly_chart(fig3, use_container_width=True)
 
 
-def display_monte_carlo(simulations):
-    st.subheader("📊 Simulation Visualization")
-    smoothing_method = st.selectbox("Select smoothing method", list(simulations.keys()))
+def display_monte_carlo(simulations: dict, smoothing_method: str):
+    if smoothing_method == "Raw":
+        data = simulations["raw"]
+    elif smoothing_method == "Moving Average":
+        data = simulations["ma"]
+    elif smoothing_method == "Weighted MA":
+        data = simulations["wma"]
+    elif smoothing_method == "Exponential MA":
+        data = simulations["ema"]
+    elif smoothing_method == "Savitzky-Golay":
+        data = simulations["savgol"]
+    elif smoothing_method == "Cumulative MA":
+        data = simulations["cma"]
+    else:
+        st.warning("Unknown smoothing method selected.")
+        return
 
-    selected = simulations[smoothing_method]
-
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(selected[:, :10])  # Show first 10 paths
-    ax.set_title(f"{smoothing_method.upper()} - First 10 Simulations")
-    st.pyplot(fig)
-
-    st.markdown(f"**Data shape:** `{selected.shape}`")
-    st.markdown("**Sample values (first 5 days of first simulation):**")
-    for i, val in enumerate(selected[:5, 0]):
-        st.write(f"Day {i+1}: {val:.2f}")
+    # Display logic, e.g.:
+    st.line_chart(pd.DataFrame(data))
 
 
 
@@ -1121,27 +1125,38 @@ def main():
             st.header("🎲 Monte Carlo Simulation")
             n_simulations = st.slider("Number of Simulations", 100, 5000, 1000)
             time_horizon = st.slider("Time Horizon (days)", 30, 365, 180)
-            initial_price = st.number_input("Initial Price", min_value=1.0, value=100.0)
+
+            # Initialize session state for simulation results
+            if "monte_carlo_simulations" not in st.session_state:
+                st.session_state.monte_carlo_simulations = None
 
             if st.button("Run Simulation"):
                 try:
-                    simulations = monte_carlo_simulation(initial_price, n_simulations, time_horizon)
+                    st.session_state.monte_carlo_simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
 
+                    # ✅ Diagnostic: Show which keys exist and their properties
                     st.subheader("🧪 Simulation Output Check")
                     for key in ['raw', 'ma', 'wma', 'ema', 'savgol', 'cma']:
-                        arr = simulations.get(key)
+                        arr = st.session_state.monte_carlo_simulations.get(key)
                         if arr is None:
-                            st.error(f"❌ Key '{key}' is missing!")
+                            st.error(f"❌ Key '{key}' is missing from simulation output!")
                         else:
                             st.success(
                                 f"✅ {key.upper()} → shape: {arr.shape}, NaNs: {np.isnan(arr).sum()}, Zeros: {np.sum(arr == 0)}"
                             )
 
-                    # Display interactive plot and info
-                    display_monte_carlo(simulations)
-
                 except Exception as e:
-                    st.error(f"❌ Simulation failed: {str(e)}")
+                    st.error(f"Simulation failed: {str(e)}")
+
+            # Display smoothing selection and visualization only if simulations are available
+            if st.session_state.monte_carlo_simulations:
+                st.subheader("📊 Simulation Visualization")
+                smoothing_option = st.selectbox(
+                    "Select smoothing method",
+                    ["Raw", "Moving Average", "Weighted MA", "Exponential MA", "Savitzky-Golay", "Cumulative MA"]
+                )
+
+                display_monte_carlo(st.session_state.monte_carlo_simulations, smoothing_option)
         
         elif analysis_type == "Financial Ratios":
             st.header("📈 Financial Ratios Analysis")
