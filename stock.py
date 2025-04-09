@@ -1160,13 +1160,23 @@ def main():
                 try:
                     simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
                     st.session_state.simulations = simulations  # ✅ Store in session_state
+                    st.success("✅ Simulation completed!")
 
-                    st.success("Simulation completed!")
+                    # Diagnostics
+                    st.subheader("🧪 Simulation Output Check")
+                    for key in ['raw', 'ma', 'wma', 'ema', 'savgol', 'cma']:
+                        arr = simulations.get(key)
+                        if arr is None:
+                            st.error(f"❌ Key '{key}' is missing from simulation output!")
+                        else:
+                            st.success(
+                                f"✅ {key.upper()} → shape: {arr.shape}, NaNs: {np.isnan(arr).sum()}, Zeros: {np.sum(arr == 0)}"
+                            )
 
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
 
-            # If simulations are available, allow smoothing method selection
+            # Allow visualization if simulations exist
             if st.session_state.simulations:
                 st.subheader("📊 Simulation Visualization")
                 smoothing_method = st.selectbox("Select smoothing method", ["raw", "ma", "wma", "ema", "savgol", "cma"])
@@ -1174,7 +1184,7 @@ def main():
                 selected_data = st.session_state.simulations.get(smoothing_method)
                 if selected_data is not None:
                     fig, ax = plt.subplots(figsize=(10, 5))
-                    for i in range(min(50, selected_data.shape[1])):  # Plot up to 50 simulations
+                    for i in range(min(50, selected_data.shape[1])):  # Limit to 50 lines
                         ax.plot(selected_data[:, i], alpha=0.3)
                     ax.set_title(f"{smoothing_method.upper()} Monte Carlo Simulations")
                     st.pyplot(fig)
