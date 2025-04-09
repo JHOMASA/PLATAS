@@ -30,7 +30,9 @@ import uuid
 
 # Configuration
 
-
+ALPHA_VANTAGE_API_KEY = "QDRRN1Y7K4EDJYT2"
+FINGPT_API_KEY = "AIzaTRDjNFU6WAx6FJ74zhm2vQqWyD5MsYKUcOk"  # Replace with actual key
+NEWS_API_KEY = "3f8e6bb1fb72490b835c800afcadd1aa"      # Replace with actual key
 
 st.set_page_config(layout="wide")
 st.title("📊 Advanced Stock Analysis Dashboard")
@@ -585,14 +587,13 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             ma_simulations[:, i] = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean().values
         ma_simulations = pd.DataFrame(ma_simulations).fillna(method='ffill').values  # Fill NaN AFTER smoothing
         
-        # Weighted Moving Average
         wma_simulations = np.zeros_like(raw_simulations)
         weights = np.arange(1, window_size + 1) / np.arange(1, window_size + 1).sum()
         for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
             wma_simulations[:, i] = series.rolling(window=window_size).apply(lambda x: np.sum(weights * x))
         wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values
-
+        wma_simulations[:, i] = series.rolling(window=window_size).apply(lambda x: np.sum(weights * x))
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
