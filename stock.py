@@ -1346,102 +1346,36 @@ def main():
                         ax.plot(selected_data[:, i], alpha=0.3)
                     ax.set_title(f"{smoothing_method.upper()} Monte Carlo Simulations")
                     st.pyplot(fig)
+
+                st.markdown("### 📉 Terminal Price Distribution")
+                terminal_prices = selected_data[-1, :]
+                fig2 = go.Figure()
+                fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
+                fig2.update_layout(
+                    xaxis_title="Price",
+                    yaxis_title="Frequency",
+                    title="Distribution of Final Prices",
+                    bargap=0.05
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+
+                st.markdown("### 📊 Monte Carlo Summary Metrics")
+                df_summary = pd.DataFrame([{
+                    "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
+                    "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
+                    "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
+                    "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
+                    "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
+                    "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
+                    "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
+                    "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
+                    "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
+                 }])
+                 st.dataframe(df_summary, use_container_width=True)
                 else:
                     st.warning("No data available for selected smoothing method.")
     
-                st.subheader("🎯 Risk Metrics Analysis")
-                try:
-                    with st.spinner("Calculating risk metrics..."):
-                        risk_metrics = calculate_risk_metrics(data)
-
-                        if risk_metrics:
-                            st.markdown("### 📉 Risk Profile Summary")
-
-                            m1, m2, m3 = st.columns(3)
-
-                            with m1:
-                                st.metric(
-                                    "Annual Volatility", 
-                                    f"{risk_metrics.get('volatility', 0):.2%}",
-                                    help="1-year standard deviation of returns"
-                                )
-                                st.progress(
-                                    min(risk_metrics.get('volatility', 0)/0.5, 1.0)
-                                )
-                                st.caption("🛈 <0.5 = Low, >1.0 = High")
-
-                            with m2:
-                                st.metric(
-                                    "Max Drawdown", 
-                                    f"{risk_metrics.get('maximumDrawdown', 0):.2%}",
-                                    help="Worst historical peak-to-trough decline"
-                                )
-                                st.progress(
-                                    min(abs(risk_metrics.get('maximumDrawdown', 0))/0.5, 1.0)
-                                )
-                                st.caption("🛈 <10% = Low, >30% = High")
-
-                            with m3:
-                                sharpe = risk_metrics.get('sharpeRatio', 0)
-                                st.metric(
-                                    "Sharpe Ratio", 
-                                    f"{sharpe:.2f}",
-                                    delta="Good" if sharpe > 1 else "Fair" if sharpe > 0 else "Poor",
-                                    help="Risk-adjusted returns (0 risk-free rate)"
-                                )
-                                st.progress((sharpe+1)/3)
-                                st.caption("🛈 <0 = Poor, >1 = Good")
-
-                            # Risk visualizations
-                            st.markdown("### 📊 Risk Over Time")
-                            if not data.empty and 'Close' in data.columns:
-                                c1, c2 = st.columns(2)
-
-                                with c1:
-                                    st.markdown("#### 30-Day Rolling Volatility")
-                                    returns = np.log(data['Close']).diff()
-                                    rolling_vol = returns.rolling(window=30).std() * np.sqrt(252)
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Scatter(
-                                        x=rolling_vol.index,
-                                        y=rolling_vol,
-                                        mode='lines',
-                                        line=dict(color='#FF4B4B', width=2),
-                                        name='Volatility'
-                                    ))
-                                    fig.update_layout(
-                                        yaxis_tickformat=".0%",
-                                        hovermode="x",
-                                        height=300,
-                                        margin=dict(t=30)
-                                    )
-                                    st.plotly_chart(fig, use_container_width=True)
-
-                                with c2:
-                                    st.markdown("#### Cumulative Drawdown")
-                                    rolling_max = data['Close'].cummax()
-                                    daily_drawdown = data['Close']/rolling_max - 1
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Scatter(
-                                        x=daily_drawdown.index,
-                                        y=daily_drawdown,
-                                        fill='tozeroy',
-                                        fillcolor='rgba(255, 75, 75, 0.3)',
-                                        line=dict(color='#FF4B4B'),
-                                        name='Drawdown'
-                                    ))
-                                    fig.update_layout(
-                                        yaxis_tickformat=".0%",
-                                        hovermode="x",
-                                        height=300,
-                                        margin=dict(t=30)
-                                    )
-                                    st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.warning("Could not calculate risk metrics")
-
-                except Exception as e:
-                    st.error(f"Risk analysis failed: {str(e)}")    
+                 
         elif analysis_type == "Financial Ratios":
             st.header("📈 Financial Ratios Analysis")
 
