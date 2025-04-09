@@ -1360,30 +1360,7 @@ def main():
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
                     
-            # Visualization section
-            if st.session_state.simulations:
-                st.subheader("📊 Simulation Visualization")
-                smoothing_method = st.selectbox(
-                "Select smoothing method",
-                ["raw", "ma", "wma", "ema", "savgol", "cma"],
-                key="sim_smoothing_tab"
-                )
-                selected_data = st.session_state.simulations.get(smoothing_method)
-
-                if selected_data is not None:
-                    st.subheader(f"📉 Terminal Price Distribution ({smoothing_method.upper()})")
-
-                    terminal_prices = selected_data[-1, :]
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
-                    fig2.update_layout(
-                        title=f"Terminal Price Distribution ({smoothing_method})",
-                        xaxis_title="Price",
-                        yaxis_title="Frequency",
-                        bargap=0.05
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-
+            
                     # TIR Distribution
                     st.markdown("### 📈 Total Investment Return (TIR) Distribution")
                     initial_prices = selected_data[0, :]
