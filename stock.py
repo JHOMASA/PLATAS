@@ -898,6 +898,8 @@ def display_stock_analysis(stock_data, ticker):
 
 def display_monte_carlo(simulations):
     st.subheader("Simulation Smoothing Options")
+
+    # Option selector
     smooth_type = st.radio("Select smoothing type", [
         "Raw",
         "Moving Average",
@@ -907,20 +909,31 @@ def display_monte_carlo(simulations):
         "Cumulative MA"
     ], horizontal=True)
 
-    # Choose the right data
-    data = simulations.get({
+    # Mapping from display name to simulation key
+    key_map = {
         "Raw": "raw",
         "Moving Average": "ma",
         "Weighted MA": "wma",
         "Exponential MA": "ema",
         "Savitzky-Golay": "savgol",
         "Cumulative MA": "cma"
-    }[smooth_type], simulations["raw"])
+    }
 
-    if data.shape[1] == 0:
-        st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
-        return
+    selected_key = key_map.get(smooth_type, "raw")
+    data = simulations.get(selected_key)
 
+    # Data validation and fallback
+    if data is None or data.shape[1] == 0 or np.isnan(data).all():
+        st.warning(f"No valid data for {smooth_type}. Falling back to Raw.")
+        data = simulations['raw']
+        smooth_type = "Raw"
+
+    # Diagnostics
+    st.caption(f"Showing: **{smooth_type}**")
+    st.write("Shape:", data.shape)
+    st.write("Sample (first 5 days, 1st path):", data[:5, 0])
+
+    # Plotting
     col1, col2 = st.columns(2)
 
     with col1:
@@ -933,33 +946,37 @@ def display_monte_carlo(simulations):
                 line=dict(width=1),
                 showlegend=False
             ))
-        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})",
-                           xaxis_title="Days",
-                           yaxis_title="Price")
+        fig1.update_layout(
+            title=f"Monte Carlo Simulation Paths ({smooth_type})",
+            xaxis_title="Days",
+            yaxis_title="Price"
+        )
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         terminal_prices = data[-1, :]
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
-        fig2.update_layout(title=f"Terminal Price Distribution ({smooth_type})",
-                           xaxis_title="Price",
-                           yaxis_title="Frequency")
+        fig2.update_layout(
+            title=f"Terminal Price Distribution ({smooth_type})",
+            xaxis_title="Price",
+            yaxis_title="Frequency"
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     # Risk Metrics Comparison
-    st.subheader("Risk Metrics Comparison")
+    st.subheader("📊 Risk Metrics Comparison")
     metrics = []
     for name, sim_data in simulations.items():
-        tp = sim_data[-1, :]
-        if len(tp) == 0:
+        if sim_data.shape[1] == 0 or np.isnan(sim_data).all():
             continue
+        tp = sim_data[-1, :]
         metrics.append({
             'Type': name.upper(),
             '5% VaR': f"${np.percentile(tp, 5):.2f}",
             '1% VaR': f"${np.percentile(tp, 1):.2f}",
             'Expected Value': f"${tp.mean():.2f}",
-            'Volatility': f"{tp.std() / tp.mean() * 100:.2f}%"
+            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%"
         })
 
     st.table(pd.DataFrame(metrics))
