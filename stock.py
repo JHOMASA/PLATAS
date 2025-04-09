@@ -1360,6 +1360,76 @@ def main():
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
                     
+            # Visualization section
+            if st.session_state.simulations:
+                st.subheader("📊 Simulation Visualization")
+                smoothing_method = st.selectbox("Select smoothing method", ["raw", "ma", "wma", "ema", "savgol", "cma"])
+                selected_data = st.session_state.simulations.get(smoothing_method)
+
+                if selected_data is not None:
+                    # Simulation Paths
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        fig1 = go.Figure()
+                        for i in range(min(20, selected_data.shape[1])):
+                            fig1.add_trace(go.Scatter(
+                                x=np.arange(selected_data.shape[0]),
+                                y=selected_data[:, i],
+                                mode='lines',
+                                line=dict(width=1),
+                                showlegend=False
+                         ))
+                        fig1.update_layout(
+                            title=f"{smoothing_method.upper()} Monte Carlo Simulation Paths",
+                            xaxis_title="Days",
+                            yaxis_title="Price"
+                        )
+                        st.plotly_chart(fig1, use_container_width=True)
+
+                    with col2:
+                        terminal_prices = selected_data[-1, :]
+                        fig2 = go.Figure()
+                        fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
+                        fig2.update_layout(
+                            title=f"Terminal Price Distribution ({smoothing_method})",
+                            xaxis_title="Price",
+                            yaxis_title="Frequency",
+                            bargap=0.05
+                        )
+                        st.plotly_chart(fig2, use_container_width=True)
+
+                    # TIR Distribution
+                    st.markdown("### 📈 Total Investment Return (TIR) Distribution")
+                    initial_prices = selected_data[0, :]
+                    tir_array = (terminal_prices - initial_prices) / initial_prices
+                    fig3 = go.Figure()
+                    fig3.add_trace(go.Histogram(x=tir_array * 100, name="TIR (%)"))
+                    fig3.update_layout(
+                        xaxis_title="TIR (%)",
+                        yaxis_title="Frequency",
+                        title="Distribution of TIR Across Simulations",
+                        bargap=0.05
+                    )
+                    st.plotly_chart(fig3, use_container_width=True)
+
+                    # Summary Table
+                    st.markdown("### 📊 Monte Carlo Summary Metrics")
+                    df_summary = pd.DataFrame([{
+                        "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
+                        "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
+                        "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
+                        "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
+                        "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
+                        "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
+                        "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
+                        "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
+                        "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
+                    }])
+                    st.dataframe(df_summary, use_container_width=True)
+
+                else:
+                    st.warning("No data available for selected smoothing method.")        
             
             # Allow visualization if simulations exist
             if st.session_state.simulations:
