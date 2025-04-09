@@ -578,20 +578,16 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             shock = np.random.normal(mu, sigma, n_simulations)
             raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
 
-        # Set smoothing window size
+        # Smoothing window
         window_size = max(5, min(20, days // 5))
 
-        # =====================
         # Simple Moving Average
-        # =====================
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size, min_periods=1).mean()
             ma_simulations[:, i] = ma_series.bfill().ffill().values
 
-        # =========================
         # Weighted Moving Average
-        # =========================
         wma_simulations = np.zeros_like(raw_simulations)
         weights = np.arange(1, window_size + 1)
         weights = weights / weights.sum()
@@ -602,17 +598,13 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             )
             wma_simulations[:, i] = wma_series.bfill().ffill().values
 
-        # ==============================
         # Exponential Moving Average
-        # ==============================
         ema_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             ema_series = pd.Series(raw_simulations[:, i]).ewm(span=window_size, adjust=False).mean()
             ema_simulations[:, i] = ema_series.bfill().ffill().values
 
-        # ==============================
-        # Savitzky-Golay Smoothing
-        # ==============================
+        # Savitzky-Golay Filter
         savgol_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             series = raw_simulations[:, i]
@@ -623,15 +615,12 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             else:
                 savgol_simulations[:, i] = series
 
-        # ==============================
         # Cumulative Moving Average
-        # ==============================
         cma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             cma_series = pd.Series(raw_simulations[:, i]).expanding().mean()
             cma_simulations[:, i] = cma_series.bfill().ffill().values
 
-        # Return all versions
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
@@ -909,68 +898,71 @@ def display_stock_analysis(stock_data, ticker):
 
 def display_monte_carlo(simulations):
     st.subheader("Simulation Smoothing Options")
-    smooth_type = st.radio("Select smoothing type", ["Raw", "Exponential MA", "Savitzky-Golay"], horizontal=True)
+    smooth_type = st.radio("Select smoothing type", [
+        "Raw",
+        "Moving Average",
+        "Weighted MA",
+        "Exponential MA",
+        "Savitzky-Golay",
+        "Cumulative MA"
+    ], horizontal=True)
 
-    if smooth_type == "Exponential MA":
-        data = simulations['ema']
-    elif smooth_type == "Savitzky-Golay":
-        data = simulations['savgol']
-    else:
-        data = simulations['raw']
-
-    # Debug visualization
-    if st.checkbox("Show debug visualization (first 5 paths)"):
-        fig_debug = go.Figure()
-        
-        # Plot raw paths - FIXED PARENTHESES
-        for i in range(min(5, simulations['raw'].shape[1])):
-            fig_debug.add_trace(
-                go.Scatter(
-                    x=np.arange(simulations['raw'].shape[0]),
-                    y=simulations['raw'][:, i],
-                    mode='lines',
-                    name=f'Raw {i+1}',
-                    line=dict(color='blue', width=1)
-                )
-            )
-        
-        # Plot MA paths if available - FIXED PARENTHESES
-        if 'ma' in simulations:
-            for i in range(min(5, simulations['ma'].shape[1])):
-                fig_debug.add_trace(
-                    go.Scatter(
-                        x=np.arange(simulations['ma'].shape[0]),
-                        y=simulations['ma'][:, i],
-                        mode='lines',
-                        name=f'MA {i+1}',
-                        line=dict(color='green', width=1)
-                    )
-                )
-        
-        # Plot WMA paths if available - FIXED PARENTHESES
-        if 'wma' in simulations:
-            for i in range(min(5, simulations['wma'].shape[1])):
-                fig_debug.add_trace(
-                    go.Scatter(
-                        x=np.arange(simulations['wma'].shape[0]),
-                        y=simulations['wma'][:, i],
-                        mode='lines',
-                        name=f'WMA {i+1}',
-                        line=dict(color='red', width=1)
-                    )
-                )
-        
-        fig_debug.update_layout(
-            title="Debug View: First 5 Paths Comparison",
-            xaxis_title="Days",
-            yaxis_title="Price",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02)
-        )
-        st.plotly_chart(fig_debug, use_container_width=True)
+    # Choose the right data
+    data = simulations.get({
+        "Raw": "raw",
+        "Moving Average": "ma",
+        "Weighted MA": "wma",
+        "Exponential MA": "ema",
+        "Savitzky-Golay": "savgol",
+        "Cumulative MA": "cma"
+    }[smooth_type], simulations["raw"])
 
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig1 = go.Figure()
+        for i in range(min(20, data.shape[1])):
+            fig1.add_trace(go.Scatter(
+                x=np.arange(data.shape[0]),
+                y=data[:, i],
+                mode='lines',
+                line=dict(width=1),
+                showlegend=False
+            ))
+        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})",
+                           xaxis_title="Days",
+                           yaxis_title="Price")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        terminal_prices = data[-1, :]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
+        fig2.update_layout(title=f"Terminal Price Distribution ({smooth_type})",
+                           xaxis_title="Price",
+                           yaxis_title="Frequency")
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # Risk Metrics Comparison
+    st.subheader("Risk Metrics Comparison")
+    metrics = []
+    for name, sim_data in simulations.items():
+        tp = sim_data[-1, :]
+        if len(tp) == 0:
+            continue
+        metrics.append({
+            'Type': name.upper(),
+            '5% VaR': f"${np.percentile(tp, 5):.2f}",
+            '1% VaR': f"${np.percentile(tp, 1):.2f}",
+            'Expected Value': f"${tp.mean():.2f}",
+            'Volatility': f"{tp.std() / tp.mean() * 100:.2f}%"
+        })
+
+    st.table(pd.DataFrame(metrics))
 
 
 
