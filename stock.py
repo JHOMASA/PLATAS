@@ -570,32 +570,30 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         sigma = returns.std()
         last_price = data['Close'].iloc[-1]
 
-        # Generate random walks
+        # Generate raw simulation paths
         raw_simulations = np.zeros((days, n_simulations))
         raw_simulations[0] = last_price
-
         for day in range(1, days):
             shock = np.random.normal(mu, sigma, n_simulations)
             raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
 
-        # Validate raw simulations
-        if np.any(raw_simulations <= 0):
-            raise ValueError("Invalid price values in raw simulations")
+        # Set smoothing window size
+        window_size = max(5, min(20, days // 5))
 
-        # Apply smoothing techniques
-        window_size = max(5, min(20, days // 5))  # More balanced window
-
+        # =====================
         # Simple Moving Average
+        # =====================
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size, min_periods=1).mean()
-            ma_simulations[:, i] = ma_series.bfill().ffill().values  # Better filling
+            ma_simulations[:, i] = ma_series.bfill().ffill().values
 
+        # =========================
         # Weighted Moving Average
+        # =========================
         wma_simulations = np.zeros_like(raw_simulations)
         weights = np.arange(1, window_size + 1)
         weights = weights / weights.sum()
-
         for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
             wma_series = series.rolling(window=window_size, min_periods=1).apply(
@@ -603,16 +601,43 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             )
             wma_simulations[:, i] = wma_series.bfill().ffill().values
 
-        # Debug checks
-        if np.all(ma_simulations == 0):
-            st.error("MA simulations failed - all zeros")
-        if np.all(wma_simulations == 0):
-            st.error("WMA simulations failed - all zeros")
+        # ==============================
+        # Exponential Moving Average
+        # ==============================
+        ema_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            ema_series = pd.Series(raw_simulations[:, i]).ewm(span=window_size, adjust=False).mean()
+            ema_simulations[:, i] = ema_series.bfill().ffill().values
 
+        # ==============================
+        # Savitzky-Golay Smoothing
+        # ==============================
+        savgol_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            series = raw_simulations[:, i]
+            valid_window = window_size if window_size % 2 != 0 else window_size + 1
+            valid_window = min(valid_window, days - 1 if (days - 1) % 2 != 0 else days - 2)
+            if valid_window >= 3:
+                savgol_simulations[:, i] = savgol_filter(series, window_length=valid_window, polyorder=2)
+            else:
+                savgol_simulations[:, i] = series
+
+        # ==============================
+        # Cumulative Moving Average
+        # ==============================
+        cma_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            cma_series = pd.Series(raw_simulations[:, i]).expanding().mean()
+            cma_simulations[:, i] = cma_series.bfill().ffill().values
+
+        # Return all versions
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
-            'wma': wma_simulations
+            'wma': wma_simulations,
+            'ema': ema_simulations,
+            'savgol': savgol_simulations,
+            'cma': cma_simulations
         }
 
     except Exception as e:
@@ -883,12 +908,12 @@ def display_stock_analysis(stock_data, ticker):
 
 def display_monte_carlo(simulations):
     st.subheader("Simulation Smoothing Options")
-    smooth_type = st.radio("Select smoothing type", ["Raw", "Moving Average", "Weighted MA"], horizontal=True)
+    smooth_type = st.radio("Select smoothing type", ["Raw", "Exponential MA", "Savitzky-Golay"], horizontal=True)
 
-    if smooth_type == "Moving Average":
-        data = simulations['ma']
-    elif smooth_type == "Weighted MA":
-        data = simulations['wma']
+    if smooth_type == "Exponential MA":
+        data = simulations['ema']
+    elif smooth_type == "Savitzky-Golay":
+        data = simulations['savgol']
     else:
         data = simulations['raw']
 
