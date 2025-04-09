@@ -952,20 +952,45 @@ def display_monte_carlo(simulations: dict, smoothing_method: str):
         )
         st.plotly_chart(fig2, use_container_width=True)
     # Risk Metrics Table
-    st.subheader("📊 Risk Metrics Comparison")
-
-    metrics = []
+    st.markdown("### 📊 Monte Carlo Summary Metrics")
+    summary_df = pd.DataFrame([{
+        "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
+        "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
+        "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
+        "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
+        "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
+        "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
+        "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
+        "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
+        "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
+    }])
+    st.dataframe(summary_df, use_container_width=True)
+    st.markdown("### 📋 Method Comparison: Risk Metrics (All Smoothing Types)")
+    comparison = []
     for name, sim_data in simulations.items():
         if sim_data is None or sim_data.shape[1] == 0:
             continue
         tp = sim_data[-1, :]
-        metrics.append({
-            'Type': name.upper(),
-            '5% VaR': f"${np.percentile(tp, 5):.2f}",
-            '1% VaR': f"${np.percentile(tp, 1):.2f}",
-            'Expected Value': f"${tp.mean():.2f}",
-            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%" if tp.mean() != 0 else "N/A"
+        ip = sim_data[0, :]
+        tir = (tp - ip) / ip
+        volatility = tp.std() / tp.mean() * 100 if tp.mean() != 0 else np.nan
+
+        comparison.append({
+            "Smoothing Type": name.upper(),
+            "Expected Value ($)": f"{tp.mean():.2f}",
+            "Volatility (%)": f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
+            "5% VaR ($)": f"{np.percentile(tp, 5):.2f}",
+            "1% VaR ($)": f"{np.percentile(tp, 1):.2f}",
+            "Avg TIR (%)": f"{tir.mean() * 100:.2f}"
         })
+
+    if comparison:
+        st.dataframe(pd.DataFrame(comparison), use_container_width=True)
+    else:
+        st.info("No valid data for smoothing method comparison.")
+    csv = summary_df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Summary CSV", data=csv, file_name="monte_carlo_summary.csv", mime="text/csv")
+
 
     if metrics:
         st.table(pd.DataFrame(metrics))
