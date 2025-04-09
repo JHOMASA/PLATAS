@@ -1107,6 +1107,9 @@ def display_predictions(historical_data, predictions, model_name):
         mae = mean_absolute_error(test, predictions[:30])
         st.metric("Mean Absolute Error (30-day backtest)", f"${mae:.2f}")
 
+if 'simulations' not in st.session_state:
+    st.session_state.simulations = None
+
 # Updated main app structure
 def main():
     # All main() content indented 4 spaces
