@@ -1400,11 +1400,34 @@ def main():
 
                 selected_data = st.session_state.simulations.get(smoothing_method)
                 if selected_data is not None:
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    for i in range(min(50, selected_data.shape[1])):  # Limit to 50 lines
-                        ax.plot(selected_data[:, i], alpha=0.3)
-                    ax.set_title(f"{smoothing_method.upper()} Monte Carlo Simulations")
-                    st.pyplot(fig)
+                     terminal_prices = selected_data[-1, :]
+                     initial_prices = selected_data[0, :]
+                     tir_array = (terminal_prices - initial_prices) / initial_prices
+
+                     # 📉 Histogram of Terminal Prices
+                    fig2 = go.Figure()
+                    fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
+                    fig2.update_layout(
+                        title=f"Terminal Price Distribution ({smoothing_method})",
+                        xaxis_title="Price",
+                        yaxis_title="Frequency",
+                        bargap=0.05
+                    )
+                    st.plotly_chart(fig2, use_container_width=True)
+
+                    # 📈 TIR Histogram
+                    st.markdown("### 📈 Total Investment Return (TIR) Distribution")
+                    fig3 = go.Figure()
+                    fig3.add_trace(go.Histogram(x=tir_array * 100, name="TIR (%)"))
+                    fig3.update_layout(
+                        xaxis_title="TIR (%)",
+                        yaxis_title="Frequency",
+                        title="Distribution of TIR Across Simulations",
+                        bargap=0.05
+                    )
+                    st.plotly_chart(fig3, use_container_width=True)
+
+                    # ✅ Summary Table (Safe now)
                     st.markdown("### 📊 Monte Carlo Summary Metrics")
                     df_summary = pd.DataFrame([{
                         "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
@@ -1419,18 +1442,8 @@ def main():
                     }])
                     st.dataframe(df_summary, use_container_width=True)
 
-                st.markdown("### 📉 Terminal Price Distribution")
-                terminal_prices = selected_data[-1, :]
-                fig2 = go.Figure()
-                fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
-                fig2.update_layout(
-                    xaxis_title="Price",
-                    yaxis_title="Frequency",
-                    title="Distribution of Final Prices",
-                    bargap=0.05
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-
+                else:
+                    st.warning("No data available for selected smoothing method.")
                 
     
                  
