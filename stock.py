@@ -1577,6 +1577,49 @@ def main():
                                         margin=dict(t=30)
                                     )
                                     st.plotly_chart(fig, use_container_width=True)
+
+                            if 'simulations' in st.session_state and st.session_state.simulations:
+                                st.markdown("### 📐 Simulated vs Historical Risk Metrics Table")
+
+                                metrics = []
+
+                                # Historical TIR
+                                if 'Close' in data.columns and len(data) > 1:
+                                    hist_tir = (data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0]
+                                else:
+                                    hist_tir = np.nan
+
+                                for name, sim_data in st.session_state.simulations.items():
+                                    if sim_data is None or sim_data.shape[1] == 0:
+                                        continue
+
+                                    tp = sim_data[-1, :]
+                                    ip = sim_data[0, :]
+
+                                    tir_array = (tp - ip) / ip
+                                    expected_value = tp.mean()
+                                    std_dev = tp.std()
+                                    volatility = (std_dev / expected_value) * 100 if expected_value != 0 else np.nan
+                                    tir_mean = tir_array.mean()
+
+                                    metrics.append({
+                                        'Smoothing Type': name.upper(),
+                                        'Expected Value ($)': f"{expected_value:.2f}",
+                                        'Volatility (%)': f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
+                                        '5% VaR ($)': f"{np.percentile(tp, 5):.2f}",
+                                        '1% VaR ($)': f"{np.percentile(tp, 1):.2f}",
+                                        'Simulated TIR (%)': f"{tir_mean * 100:.2f}",
+                                        'Historical TIR (%)': f"{hist_tir * 100:.2f}" if not np.isnan(hist_tir) else "N/A",
+                                        'Min Price ($)': f"{tp.min():.2f}",
+                                        'Max Price ($)': f"{tp.max():.2f}"
+                                    })
+
+                                if metrics:
+                                    df_metrics = pd.DataFrame(metrics)
+                                    st.dataframe(df_metrics, use_container_width=True)
+                                else:
+                                    st.info("No simulation output available for risk table.")
+                        
                         else:
                             st.warning("Could not calculate risk metrics")
     
