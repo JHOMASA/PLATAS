@@ -584,8 +584,8 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         # Simple Moving Average (fill NaN after smoothing)
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            ma_simulations[:, i] = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean().values
-        ma_simulations = pd.DataFrame(ma_simulations).fillna(method='ffill').values  # Fill NaN AFTER smoothing
+            ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean()
+            ma_simulations[:,i] = ma_series.fillna(method = "ffill").fillna(method = "bfill")  # Fill NaN AFTER smoothing
         
        wma_simulations = np.zeros_like(raw_simulations)
        weights = np.arange(1, window_size + 1)
@@ -595,6 +595,7 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             series = pd.Series(raw_simulations[:, i])
             wma_series = series.rolling(window=window_size).apply(lambda x: np.dot(weights, x), raw=True)
             wma_simulations[:, i] = wma_series.fillna(method='ffill').fillna(method='bfill').values
+           
         wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values
         wma_simulations[:, i] = series.rolling(window=window_size).apply(lambda x: np.sum(weights * x))
         return {
