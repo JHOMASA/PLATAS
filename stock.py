@@ -563,47 +563,77 @@ def calculate_risk_metrics(data: pd.DataFrame) -> Dict[str, Any]:
         st.error(f"Risk calculation error: {str(e)}")
         return {}
 
-def monte_carlo_simulation(initial_price, n_simulations, time_horizon, mu=0.05, sigma=0.2):
-    dt = 1 / time_horizon
-    raw = np.zeros((time_horizon, n_simulations))
-    raw[0] = initial_price
-    for t in range(1, time_horizon):
-        random_shock = np.random.normal(loc=mu * dt, scale=sigma * np.sqrt(dt), size=n_simulations)
-        raw[t] = raw[t - 1] * np.exp(random_shock)
+def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: int = 180) -> dict:
+    try:
+        returns = np.log(1 + data['Close'].pct_change())
+        mu = returns.mean()
+        sigma = returns.std()
+        last_price = data['Close'].iloc[-1]
 
-    # Smoothing functions
-    def moving_average(x, w=5):
-        return np.convolve(x, np.ones(w) / w, mode='same')
+        # Initialize simulation matrix
+        raw_simulations = np.zeros((days, n_simulations))
+        raw_simulations[0] = last_price * np.ones(n_simulations)  # ✅ Fix shape issue
 
-    def weighted_moving_average(x, w=5):
-        weights = np.arange(1, w + 1)
-        return np.convolve(x, weights / weights.sum(), mode='same')
+        for day in range(1, days):
+            shock = np.random.normal(mu, sigma, n_simulations)
+            raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
 
-    def exponential_moving_average(x, alpha=0.3):
-        ema = np.zeros_like(x)
-        ema[0] = x[0]
-        for i in range(1, len(x)):
-            ema[i] = alpha * x[i] + (1 - alpha) * ema[i - 1]
-        return ema
+        window_size = max(5, min(20, days // 5))
 
-    def cumulative_moving_average(x):
-        return np.cumsum(x) / np.arange(1, len(x) + 1)
+        # === Simple Moving Average ===
+        ma_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            series = pd.Series(raw_simulations[:, i])
+            ma_series = series.rolling(window=window_size, min_periods=1).mean()
+            ma_simulations[:, i] = ma_series.bfill().ffill().values
 
-    # Apply smoothing
-    ma = np.apply_along_axis(moving_average, 0, raw)
-    wma = np.apply_along_axis(weighted_moving_average, 0, raw)
-    ema = np.apply_along_axis(exponential_moving_average, 0, raw)
-    savgol = np.apply_along_axis(lambda x: savgol_filter(x, 7, 2), 0, raw)
-    cma = np.apply_along_axis(cumulative_moving_average, 0, raw)
+        # === Weighted Moving Average ===
+        wma_simulations = np.zeros_like(raw_simulations)
+        weights = np.arange(1, window_size + 1)
+        weights = weights / weights.sum()
+        for i in range(n_simulations):
+            series = pd.Series(raw_simulations[:, i])
+            wma_series = series.rolling(window=window_size, min_periods=1).apply(
+                lambda x: np.dot(weights[-len(x):], x), raw=True
+            )
+            wma_simulations[:, i] = wma_series.bfill().ffill().values
 
-    return {
-        "raw": raw,
-        "ma": ma,
-        "wma": wma,
-        "ema": ema,
-        "savgol": savgol,
-        "cma": cma
-    }
+        # === Exponential Moving Average ===
+        ema_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            series = pd.Series(raw_simulations[:, i])
+            ema_series = series.ewm(span=window_size, adjust=False).mean()
+            ema_simulations[:, i] = ema_series.bfill().ffill().values
+
+        # === Savitzky-Golay Filter ===
+        savgol_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            series = raw_simulations[:, i]
+            valid_window = window_size if window_size % 2 != 0 else window_size + 1
+            valid_window = min(valid_window, days - 1 if (days - 1) % 2 != 0 else days - 2)
+            if valid_window >= 3 and valid_window < days:
+                savgol_simulations[:, i] = savgol_filter(series, window_length=valid_window, polyorder=2)
+            else:
+                savgol_simulations[:, i] = series
+
+        # === Cumulative Moving Average ===
+        cma_simulations = np.zeros_like(raw_simulations)
+        for i in range(n_simulations):
+            series = pd.Series(raw_simulations[:, i])
+            cma_series = series.expanding().mean()
+            cma_simulations[:, i] = cma_series.bfill().ffill().values
+
+        return {
+            'raw': raw_simulations,
+            'ma': ma_simulations,
+            'wma': wma_simulations,
+            'ema': ema_simulations,
+            'savgol': savgol_simulations,
+            'cma': cma_simulations
+        }
+
+    except Exception as e:
+        raise Exception(f"Enhanced Monte Carlo simulation failed: {str(e)}")
 
 def train_holt_winters(data: pd.DataFrame, seasonal_periods: int) -> Tuple[object, str]:
     """Train Holt-Winters forecasting model"""
@@ -1126,38 +1156,30 @@ def main():
             n_simulations = st.slider("Number of Simulations", 100, 5000, 1000)
             time_horizon = st.slider("Time Horizon (days)", 30, 365, 180)
 
-            # Initialize session state for simulation results
-            if "monte_carlo_simulations" not in st.session_state:
-                st.session_state.monte_carlo_simulations = None
-
             if st.button("Run Simulation"):
                 try:
-                    st.session_state.monte_carlo_simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
+                    simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
+                    st.session_state.simulations = simulations  # ✅ Store in session_state
 
-                    # ✅ Diagnostic: Show which keys exist and their properties
-                    st.subheader("🧪 Simulation Output Check")
-                    for key in ['raw', 'ma', 'wma', 'ema', 'savgol', 'cma']:
-                        arr = st.session_state.monte_carlo_simulations.get(key)
-                        if arr is None:
-                            st.error(f"❌ Key '{key}' is missing from simulation output!")
-                        else:
-                            st.success(
-                                f"✅ {key.upper()} → shape: {arr.shape}, NaNs: {np.isnan(arr).sum()}, Zeros: {np.sum(arr == 0)}"
-                            )
+                    st.success("Simulation completed!")
 
                 except Exception as e:
                     st.error(f"Simulation failed: {str(e)}")
 
-            # Display smoothing selection and visualization only if simulations are available
-            if st.session_state.monte_carlo_simulations:
+            # If simulations are available, allow smoothing method selection
+            if st.session_state.simulations:
                 st.subheader("📊 Simulation Visualization")
-                smoothing_option = st.selectbox(
-                    "Select smoothing method",
-                    ["Raw", "Moving Average", "Weighted MA", "Exponential MA", "Savitzky-Golay", "Cumulative MA"]
-                )
+                smoothing_method = st.selectbox("Select smoothing method", ["raw", "ma", "wma", "ema", "savgol", "cma"])
 
-                display_monte_carlo(st.session_state.monte_carlo_simulations, smoothing_option)
-        
+                selected_data = st.session_state.simulations.get(smoothing_method)
+                if selected_data is not None:
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    for i in range(min(50, selected_data.shape[1])):  # Plot up to 50 simulations
+                        ax.plot(selected_data[:, i], alpha=0.3)
+                    ax.set_title(f"{smoothing_method.upper()} Monte Carlo Simulations")
+                    st.pyplot(fig)
+                else:
+                    st.warning("No data available for selected smoothing method.")
         elif analysis_type == "Financial Ratios":
             st.header("📈 Financial Ratios Analysis")
 
