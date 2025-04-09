@@ -580,7 +580,7 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             raw_simulations[day] = raw_simulations[day-1] * np.exp(shock)
         
         # Apply smoothing techniques
-        window_size = min(20, days//10)  # Adaptive window size
+        window_size = min(20, days // 10)  # Adaptive window size
         
         # Simple Moving Average (fill NaN after smoothing)
         ma_simulations = np.zeros_like(raw_simulations)
@@ -588,19 +588,20 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             ma_simulations[:, i] = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean().values
         ma_simulations = pd.DataFrame(ma_simulations).fillna(method='ffill').values  # Fill NaN AFTER smoothing
         
+        # Weighted Moving Average
         wma_simulations = np.zeros_like(raw_simulations)
-        weights = np.arange(1, window_size+1) / np.arange(1, window_size+1).sum()
+        weights = np.arange(1, window_size + 1) / np.arange(1, window_size + 1).sum()
         for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
             wma_simulations[:, i] = series.rolling(window=window_size).apply(lambda x: np.sum(weights * x))
-        wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values  # Fill forward
+        wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values
 
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
             'wma': wma_simulations
-        )
-        
+        }
+
     except Exception as e:
         raise Exception(f"Enhanced Monte Carlo simulation failed: {str(e)}")
 def train_holt_winters(data: pd.DataFrame, seasonal_periods: int) -> Tuple[object, str]:
