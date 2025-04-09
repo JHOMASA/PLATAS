@@ -896,7 +896,7 @@ def display_monte_carlo(simulations):
     if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
-        # Plot raw paths
+        # Plot raw paths - FIXED PARENTHESES HERE
         for i in range(min(5, simulations['raw'].shape[1])):
             fig_debug.add_trace(go.Scatter(
                 x=np.arange(simulations['raw'].shape[0]),
@@ -915,7 +915,7 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'MA {i+1}',
                     line=dict(color='green', width=1)
-                ))
+                )
         
         # Plot WMA paths if available
         if 'wma' in simulations:
