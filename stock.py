@@ -881,9 +881,6 @@ def display_stock_analysis(stock_data, ticker):
         st.plotly_chart(fig3, use_container_width=True)
 
 
-# Add this at the top of your script with other configurations
-DEBUG_MODE = False  # Set to True when you need debugging
-
 def display_monte_carlo(simulations):
     st.subheader("Simulation Smoothing Options")
     smooth_type = st.radio("Select smoothing type", ["Raw", "Moving Average", "Weighted MA"], horizontal=True)
@@ -895,10 +892,8 @@ def display_monte_carlo(simulations):
     else:
         data = simulations['raw']
 
-    # Debug visualization (always shown if DEBUG_MODE is True)
-    if DEBUG_MODE or st.checkbox("Show debug visualization (first 5 paths)"):
-        st.markdown("### Debug View: First 5 Paths Comparison")
-        
+    # Debug visualization
+    if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
         # Plot raw paths
@@ -909,7 +904,7 @@ def display_monte_carlo(simulations):
                 mode='lines',
                 name=f'Raw {i+1}',
                 line=dict(color='blue', width=1)
-            ))
+            )
         
         # Plot MA paths if available
         if 'ma' in simulations:
@@ -920,7 +915,7 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'MA {i+1}',
                     line=dict(color='green', width=1)
-                )
+                ))
         
         # Plot WMA paths if available
         if 'wma' in simulations:
@@ -931,9 +926,10 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'WMA {i+1}',
                     line=dict(color='red', width=1)
-                )
+                ))
         
         fig_debug.update_layout(
+            title="Debug View: First 5 Paths Comparison",
             xaxis_title="Days",
             yaxis_title="Price",
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
@@ -943,7 +939,6 @@ def display_monte_carlo(simulations):
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
-
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
     """
