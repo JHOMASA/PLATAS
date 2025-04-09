@@ -565,15 +565,16 @@ def calculate_risk_metrics(data: pd.DataFrame) -> Dict[str, Any]:
 
 def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: int = 180) -> dict:
     try:
-        # Calculate daily returns
+        # Calculate daily log returns
         returns = np.log(1 + data['Close'].pct_change())
         mu = returns.mean()
         sigma = returns.std()
         last_price = data['Close'].iloc[-1]
 
-        # Generate raw simulation paths
+        # Raw Monte Carlo Simulations
         raw_simulations = np.zeros((days, n_simulations))
         raw_simulations[0] = last_price
+
         for day in range(1, days):
             shock = np.random.normal(mu, sigma, n_simulations)
             raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
@@ -581,13 +582,14 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         # Smoothing window
         window_size = max(5, min(20, days // 5))
 
-        # Simple Moving Average
+        # === Simple Moving Average ===
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size, min_periods=1).mean()
+            series = pd.Series(raw_simulations[:, i])
+            ma_series = series.rolling(window=window_size, min_periods=1).mean()
             ma_simulations[:, i] = ma_series.bfill().ffill().values
 
-        # Weighted Moving Average
+        # === Weighted Moving Average ===
         wma_simulations = np.zeros_like(raw_simulations)
         weights = np.arange(1, window_size + 1)
         weights = weights / weights.sum()
@@ -598,28 +600,45 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             )
             wma_simulations[:, i] = wma_series.bfill().ffill().values
 
-        # Exponential Moving Average
+        # === Exponential Moving Average ===
         ema_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            ema_series = pd.Series(raw_simulations[:, i]).ewm(span=window_size, adjust=False).mean()
+            series = pd.Series(raw_simulations[:, i])
+            ema_series = series.ewm(span=window_size, adjust=False).mean()
+            if ema_series.isnull().all():
+                ema_series = series  # fallback if EMA fails
             ema_simulations[:, i] = ema_series.bfill().ffill().values
 
-        # Savitzky-Golay Filter
+        # === Savitzky-Golay Filter ===
         savgol_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             series = raw_simulations[:, i]
             valid_window = window_size if window_size % 2 != 0 else window_size + 1
             valid_window = min(valid_window, days - 1 if (days - 1) % 2 != 0 else days - 2)
-            if valid_window >= 3:
+            if valid_window >= 3 and valid_window < days:
                 savgol_simulations[:, i] = savgol_filter(series, window_length=valid_window, polyorder=2)
             else:
-                savgol_simulations[:, i] = series
+                savgol_simulations[:, i] = series  # fallback
 
-        # Cumulative Moving Average
+        # === Cumulative Moving Average ===
         cma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            cma_series = pd.Series(raw_simulations[:, i]).expanding().mean()
+            series = pd.Series(raw_simulations[:, i])
+            cma_series = series.expanding().mean()
             cma_simulations[:, i] = cma_series.bfill().ffill().values
+
+        # === Debug Logs ===
+        print("=== Monte Carlo Smoothing Debug Output ===")
+        smoothing_outputs = {
+            'MA': ma_simulations,
+            'WMA': wma_simulations,
+            'EMA': ema_simulations,
+            'SAVGOL': savgol_simulations,
+            'CMA': cma_simulations
+        }
+
+        for name, sim in smoothing_outputs.items():
+            print(f"{name} → shape: {sim.shape}, all NaN: {np.isnan(sim).all()}, all zeros: {np.all(sim == 0)}")
 
         return {
             'raw': raw_simulations,
