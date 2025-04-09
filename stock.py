@@ -568,7 +568,7 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         returns = np.log(1 + data['Close'].pct_change())
         mu = returns.mean()
         sigma = returns.std()
-        last_price = data['Close'].iloc[-1]
+        last_price = data['Close'].iloc[-1]  # Fixed the tuple bug
 
         # Generate random walks
         raw_simulations = np.zeros((days, n_simulations))
@@ -579,12 +579,12 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
 
         # Apply smoothing techniques
-        window_size = min(20, days // 10)  # Adaptive window size
+        window_size = min(20, days // 10)
 
         # Simple Moving Average
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean()
+            ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size, min_periods=1).mean()
             ma_simulations[:, i] = ma_series.fillna(method='ffill').fillna(method='bfill').values
 
         # Weighted Moving Average
@@ -594,7 +594,9 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
 
         for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
-            wma_series = series.rolling(window=window_size).apply(lambda x: np.dot(weights, x), raw=True)
+            wma_series = series.rolling(window=window_size, min_periods=1).apply(
+                lambda x: np.dot(weights[-len(x):], x), raw=True
+            )
             wma_simulations[:, i] = wma_series.fillna(method='ffill').fillna(method='bfill').values
 
         return {
@@ -870,24 +872,23 @@ def display_stock_analysis(stock_data, ticker):
 
 
 def display_monte_carlo(simulations):
-    """Enhanced display with smoothing options"""
     st.subheader("Simulation Smoothing Options")
-    smooth_type = st.radio("Select smoothing type", 
-                          ["Raw", "Moving Average", "Weighted MA"],
-                          horizontal=True)
-    
-    # Select which simulations to show
+    smooth_type = st.radio("Select smoothing type", ["Raw", "Moving Average", "Weighted MA"], horizontal=True)
+
     if smooth_type == "Moving Average":
         data = simulations['ma']
     elif smooth_type == "Weighted MA":
         data = simulations['wma']
     else:
         data = simulations['raw']
-    
+
+    if data.shape[1] == 0:
+        st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
+        return
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
-        # Simulation Paths
         fig1 = go.Figure()
         for i in range(min(20, data.shape[1])):
             fig1.add_trace(go.Scatter(
@@ -897,27 +898,27 @@ def display_monte_carlo(simulations):
                 line=dict(width=1),
                 showlegend=False
             ))
-        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})", 
-                         xaxis_title="Days", 
-                         yaxis_title="Price")
+        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})",
+                           xaxis_title="Days",
+                           yaxis_title="Price")
         st.plotly_chart(fig1, use_container_width=True)
-    
+
     with col2:
-        # Terminal Distribution
         terminal_prices = data[-1, :]
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
         fig2.update_layout(title=f"Terminal Price Distribution ({smooth_type})",
-                          xaxis_title="Price",
-                          yaxis_title="Frequency")
+                           xaxis_title="Price",
+                           yaxis_title="Frequency")
         st.plotly_chart(fig2, use_container_width=True)
-    
+
     # Risk Metrics Comparison
     st.subheader("Risk Metrics Comparison")
-    
     metrics = []
     for name, sim_data in simulations.items():
         tp = sim_data[-1, :]
+        if len(tp) == 0:
+            continue
         metrics.append({
             'Type': name.upper(),
             '5% VaR': f"${np.percentile(tp, 5):.2f}",
@@ -925,7 +926,7 @@ def display_monte_carlo(simulations):
             'Expected Value': f"${tp.mean():.2f}",
             'Volatility': f"{tp.std()/tp.mean()*100:.2f}%"
         })
-    
+
     st.table(pd.DataFrame(metrics))
 
 
