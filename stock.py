@@ -916,8 +916,62 @@ def display_monte_carlo(simulations: dict, smoothing_method: str):
         st.warning("Unknown smoothing method selected.")
         return
 
-    # Display logic, e.g.:
-    st.line_chart(pd.DataFrame(data))
+    st.caption("ℹ️ Simulation Diagnostic")
+    st.write("Shape:", data.shape)
+    st.write("Sample values (first 5 days, first simulation):", data[:5, 0])
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Simulation Paths
+        fig1 = go.Figure()
+        for i in range(min(20, data.shape[1])):
+            fig1.add_trace(go.Scatter(
+                x=np.arange(data.shape[0]),
+                y=data[:, i],
+                mode='lines',
+                line=dict(width=1),
+                showlegend=False
+            ))
+        fig1.update_layout(
+            title=f"Monte Carlo Simulation Paths ({smoothing_method})",
+            xaxis_title="Days",
+            yaxis_title="Price"
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        # Terminal Distribution
+        terminal_prices = data[-1, :]
+        fig2 = go.Figure()
+        fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
+        fig2.update_layout(
+            title=f"Terminal Price Distribution ({smoothing_method})",
+            xaxis_title="Price",
+            yaxis_title="Frequency"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # Risk Metrics Table
+    st.subheader("📊 Risk Metrics Comparison")
+
+    metrics = []
+    for name, sim_data in simulations.items():
+        if sim_data is None or sim_data.shape[1] == 0:
+            continue
+        tp = sim_data[-1, :]
+        metrics.append({
+            'Type': name.upper(),
+            '5% VaR': f"${np.percentile(tp, 5):.2f}",
+            '1% VaR': f"${np.percentile(tp, 1):.2f}",
+            'Expected Value': f"${tp.mean():.2f}",
+            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%" if tp.mean() != 0 else "N/A"
+        })
+
+    if metrics:
+        st.table(pd.DataFrame(metrics))
+    else:
+        st.warning("No valid simulation data for risk metrics.")
 
 
 
