@@ -892,7 +892,7 @@ def display_monte_carlo(simulations):
     else:
         data = simulations['raw']
 
-    # ===== ADD DEBUG VISUALIZATION HERE =====
+    # ===== PROPERLY INDENTED DEBUG VISUALIZATION =====
     if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
@@ -935,6 +935,11 @@ def display_monte_carlo(simulations):
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         st.plotly_chart(fig_debug, use_container_width=True)
+    # ===== END DEBUG VISUALIZATION =====
+
+    if data.shape[1] == 0:
+        st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
+        return
     # ===== END DEBUG VISUALIZATION =====
 
     if DEBUG_MODE:  # Set this as a global variable or parameter
