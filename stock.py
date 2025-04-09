@@ -1223,6 +1223,47 @@ def calculate_risk_metrics(data: pd.DataFrame) -> dict:
     except Exception as e:
         print(f"Risk metric calculation failed: {str(e)}")
         return {}
+def display_var_risk_metrics_with_historical(simulations: dict, historical_data: pd.DataFrame):
+    st.subheader("📊 Risk Metrics Comparison (Simulated vs. Historical)")
+
+    metrics = []
+
+    # Historical TIR
+    if 'Close' in historical_data.columns and len(historical_data) > 1:
+        hist_tir = (historical_data['Close'].iloc[-1] - historical_data['Close'].iloc[0]) / historical_data['Close'].iloc[0]
+    else:
+        hist_tir = np.nan
+
+    for name, sim_data in simulations.items():
+        if sim_data is None or sim_data.shape[1] == 0:
+            continue
+
+        tp = sim_data[-1, :]  # terminal prices
+        ip = sim_data[0, :]   # initial prices
+
+        tir_array = (tp - ip) / ip
+        expected_value = tp.mean()
+        std_dev = tp.std()
+        volatility = (std_dev / expected_value) * 100 if expected_value != 0 else np.nan
+        tir_mean = tir_array.mean()
+
+        metrics.append({
+            'Smoothing Type': name.upper(),
+            'Expected Value ($)': f"{expected_value:.2f}",
+            'Volatility (%)': f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
+            '5% VaR ($)': f"{np.percentile(tp, 5):.2f}",
+            '1% VaR ($)': f"{np.percentile(tp, 1):.2f}",
+            'Simulated TIR (%)': f"{tir_mean * 100:.2f}",
+            'Historical TIR (%)': f"{hist_tir * 100:.2f}" if not np.isnan(hist_tir) else "N/A",
+            'Min Price ($)': f"{tp.min():.2f}",
+            'Max Price ($)': f"{tp.max():.2f}"
+        })
+
+    if metrics:
+        df_metrics = pd.DataFrame(metrics)
+        st.dataframe(df_metrics, use_container_width=True)
+    else:
+        st.warning("No valid simulation data for risk metrics.")
 
 # Updated main app structure
 def main():
