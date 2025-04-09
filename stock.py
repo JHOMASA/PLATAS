@@ -896,37 +896,43 @@ def display_monte_carlo(simulations):
     if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
-        # Plot raw paths
+        # Plot raw paths - FIXED PARENTHESES
         for i in range(min(5, simulations['raw'].shape[1])):
-            fig_debug.add_trace(go.Scatter(
-                x=np.arange(simulations['raw'].shape[0]),
-                y=simulations['raw'][:, i],
-                mode='lines',
-                name=f'Raw {i+1}',
-                line=dict(color='blue', width=1)
+            fig_debug.add_trace(
+                go.Scatter(
+                    x=np.arange(simulations['raw'].shape[0]),
+                    y=simulations['raw'][:, i],
+                    mode='lines',
+                    name=f'Raw {i+1}',
+                    line=dict(color='blue', width=1)
+                )
             )
         
-        # Plot MA paths if available
+        # Plot MA paths if available - FIXED PARENTHESES
         if 'ma' in simulations:
             for i in range(min(5, simulations['ma'].shape[1])):
-                fig_debug.add_trace(go.Scatter(
-                    x=np.arange(simulations['ma'].shape[0]),
-                    y=simulations['ma'][:, i],
-                    mode='lines',
-                    name=f'MA {i+1}',
-                    line=dict(color='green', width=1)
-                ))
+                fig_debug.add_trace(
+                    go.Scatter(
+                        x=np.arange(simulations['ma'].shape[0]),
+                        y=simulations['ma'][:, i],
+                        mode='lines',
+                        name=f'MA {i+1}',
+                        line=dict(color='green', width=1)
+                    )
+                )
         
-        # Plot WMA paths if available
+        # Plot WMA paths if available - FIXED PARENTHESES
         if 'wma' in simulations:
             for i in range(min(5, simulations['wma'].shape[1])):
-                fig_debug.add_trace(go.Scatter(
-                    x=np.arange(simulations['wma'].shape[0]),
-                    y=simulations['wma'][:, i],
-                    mode='lines',
-                    name=f'WMA {i+1}',
-                    line=dict(color='red', width=1)
-                ))
+                fig_debug.add_trace(
+                    go.Scatter(
+                        x=np.arange(simulations['wma'].shape[0]),
+                        y=simulations['wma'][:, i],
+                        mode='lines',
+                        name=f'WMA {i+1}',
+                        line=dict(color='red', width=1)
+                    )
+                )
         
         fig_debug.update_layout(
             title="Debug View: First 5 Paths Comparison",
@@ -939,6 +945,7 @@ def display_monte_carlo(simulations):
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
+
 
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
