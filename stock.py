@@ -951,6 +951,26 @@ def display_monte_carlo(simulations: dict, smoothing_method: str):
             yaxis_title="Frequency"
         )
         st.plotly_chart(fig2, use_container_width=True)
+    # Risk Metrics Table
+    st.subheader("📊 Risk Metrics Comparison")
+
+    metrics = []
+    for name, sim_data in simulations.items():
+        if sim_data is None or sim_data.shape[1] == 0:
+            continue
+        tp = sim_data[-1, :]
+        metrics.append({
+            'Type': name.upper(),
+            '5% VaR': f"${np.percentile(tp, 5):.2f}",
+            '1% VaR': f"${np.percentile(tp, 1):.2f}",
+            'Expected Value': f"${tp.mean():.2f}",
+            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%" if tp.mean() != 0 else "N/A"
+        })
+
+    if metrics:
+        st.table(pd.DataFrame(metrics))
+    else:
+        st.warning("No valid simulation data for risk metrics.")
 
     
 
@@ -1341,21 +1361,7 @@ def main():
                 )
                 st.plotly_chart(fig2, use_container_width=True)
 
-                st.markdown("### 📊 Monte Carlo Summary Metrics")
-                df_summary = pd.DataFrame([{
-                    "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
-                    "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
-                    "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
-                    "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
-                    "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
-                    "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
-                    "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
-                    "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
-                    "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
-                 }])
-                 st.dataframe(df_summary, use_container_width=True)
-                else:
-                    st.warning("No data available for selected smoothing method.")
+                
     
                  
         elif analysis_type == "Financial Ratios":
