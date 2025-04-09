@@ -892,7 +892,7 @@ def display_monte_carlo(simulations):
     else:
         data = simulations['raw']
 
-    # ===== PROPERLY INDENTED DEBUG VISUALIZATION =====
+    # Debug visualization option 1 - checkbox controlled
     if st.checkbox("Show debug visualization (first 5 paths)"):
         fig_debug = go.Figure()
         
@@ -935,21 +935,27 @@ def display_monte_carlo(simulations):
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         st.plotly_chart(fig_debug, use_container_width=True)
-    # ===== END DEBUG VISUALIZATION =====
 
-    if data.shape[1] == 0:
-        st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
-        return
-    # ===== END DEBUG VISUALIZATION =====
-
-    if DEBUG_MODE:  # Set this as a global variable or parameter
-    fig = go.Figure()
-    for i in range(min(5, n_simulations)):
-        fig.add_trace(go.Scatter(y=raw_simulations[:, i], name=f'Raw {i}'))
-        fig.add_trace(go.Scatter(y=ma_simulations[:, i], name=f'MA {i}'))
-        fig.add_trace(go.Scatter(y=wma_simulations[:, i], name=f'WMA {i}'))
-    fig.update_layout(title='First 5 Paths Comparison')
-    st.plotly_chart(fig)
+    # Debug visualization option 2 - global DEBUG_MODE flag
+    if DEBUG_MODE:  # Make sure DEBUG_MODE is defined at the top of your script
+        fig = go.Figure()
+        for i in range(min(5, simulations['raw'].shape[1])):
+            fig.add_trace(go.Scatter(
+                y=simulations['raw'][:, i], 
+                name=f'Raw {i}'
+            ))
+            if 'ma' in simulations:
+                fig.add_trace(go.Scatter(
+                    y=simulations['ma'][:, i],
+                    name=f'MA {i}'
+                ))
+            if 'wma' in simulations:
+                fig.add_trace(go.Scatter(
+                    y=simulations['wma'][:, i],
+                    name=f'WMA {i}'
+                ))
+        fig.update_layout(title='First 5 Paths Comparison')
+        st.plotly_chart(fig, use_container_width=True)
 
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
