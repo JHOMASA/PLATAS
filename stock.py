@@ -27,6 +27,7 @@ import requests
 from typing import  Dict, Any,Tuple, Optional,List
 from sklearn.preprocessing import MinMaxScaler
 import uuid
+from scipy.signal import savgol_filter
 
 # Configuration
 
