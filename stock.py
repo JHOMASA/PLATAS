@@ -568,7 +568,7 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         returns = np.log(1 + data['Close'].pct_change())
         mu = returns.mean()
         sigma = returns.std()
-        last_price = data['Close'].iloc[-1]  # Fixed the tuple bug
+        last_price = data['Close'].iloc[-1]
 
         # Generate random walks
         raw_simulations = np.zeros((days, n_simulations))
@@ -578,14 +578,18 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             shock = np.random.normal(mu, sigma, n_simulations)
             raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
 
+        # Validate raw simulations
+        if np.any(raw_simulations <= 0):
+            raise ValueError("Invalid price values in raw simulations")
+
         # Apply smoothing techniques
-        window_size = min(20, days // 10)
+        window_size = max(5, min(20, days // 5))  # More balanced window
 
         # Simple Moving Average
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size, min_periods=1).mean()
-            ma_simulations[:, i] = ma_series.fillna(method='ffill').fillna(method='bfill').values
+            ma_simulations[:, i] = ma_series.bfill().ffill().values  # Better filling
 
         # Weighted Moving Average
         wma_simulations = np.zeros_like(raw_simulations)
@@ -597,7 +601,13 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
             wma_series = series.rolling(window=window_size, min_periods=1).apply(
                 lambda x: np.dot(weights[-len(x):], x), raw=True
             )
-            wma_simulations[:, i] = wma_series.fillna(method='ffill').fillna(method='bfill').values
+            wma_simulations[:, i] = wma_series.bfill().ffill().values
+
+        # Debug checks
+        if np.all(ma_simulations == 0):
+            st.error("MA simulations failed - all zeros")
+        if np.all(wma_simulations == 0):
+            st.error("WMA simulations failed - all zeros")
 
         return {
             'raw': raw_simulations,
@@ -882,52 +892,63 @@ def display_monte_carlo(simulations):
     else:
         data = simulations['raw']
 
+    # ===== ADD DEBUG VISUALIZATION HERE =====
+    if st.checkbox("Show debug visualization (first 5 paths)"):
+        fig_debug = go.Figure()
+        
+        # Plot raw paths
+        for i in range(min(5, simulations['raw'].shape[1])):
+            fig_debug.add_trace(go.Scatter(
+                x=np.arange(simulations['raw'].shape[0]),
+                y=simulations['raw'][:, i],
+                mode='lines',
+                name=f'Raw {i+1}',
+                line=dict(color='blue', width=1)
+            ))
+        
+        # Plot MA paths if available
+        if 'ma' in simulations:
+            for i in range(min(5, simulations['ma'].shape[1])):
+                fig_debug.add_trace(go.Scatter(
+                    x=np.arange(simulations['ma'].shape[0]),
+                    y=simulations['ma'][:, i],
+                    mode='lines',
+                    name=f'MA {i+1}',
+                    line=dict(color='green', width=1)
+                ))
+        
+        # Plot WMA paths if available
+        if 'wma' in simulations:
+            for i in range(min(5, simulations['wma'].shape[1])):
+                fig_debug.add_trace(go.Scatter(
+                    x=np.arange(simulations['wma'].shape[0]),
+                    y=simulations['wma'][:, i],
+                    mode='lines',
+                    name=f'WMA {i+1}',
+                    line=dict(color='red', width=1)
+                ))
+        
+        fig_debug.update_layout(
+            title="Debug View: First 5 Paths Comparison",
+            xaxis_title="Days",
+            yaxis_title="Price",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02)
+        )
+        st.plotly_chart(fig_debug, use_container_width=True)
+    # ===== END DEBUG VISUALIZATION =====
+
+    if DEBUG_MODE:  # Set this as a global variable or parameter
+    fig = go.Figure()
+    for i in range(min(5, n_simulations)):
+        fig.add_trace(go.Scatter(y=raw_simulations[:, i], name=f'Raw {i}'))
+        fig.add_trace(go.Scatter(y=ma_simulations[:, i], name=f'MA {i}'))
+        fig.add_trace(go.Scatter(y=wma_simulations[:, i], name=f'WMA {i}'))
+    fig.update_layout(title='First 5 Paths Comparison')
+    st.plotly_chart(fig)
+
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig1 = go.Figure()
-        for i in range(min(20, data.shape[1])):
-            fig1.add_trace(go.Scatter(
-                x=np.arange(data.shape[0]),
-                y=data[:, i],
-                mode='lines',
-                line=dict(width=1),
-                showlegend=False
-            ))
-        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})",
-                           xaxis_title="Days",
-                           yaxis_title="Price")
-        st.plotly_chart(fig1, use_container_width=True)
-
-    with col2:
-        terminal_prices = data[-1, :]
-        fig2 = go.Figure()
-        fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
-        fig2.update_layout(title=f"Terminal Price Distribution ({smooth_type})",
-                           xaxis_title="Price",
-                           yaxis_title="Frequency")
-        st.plotly_chart(fig2, use_container_width=True)
-
-    # Risk Metrics Comparison
-    st.subheader("Risk Metrics Comparison")
-    metrics = []
-    for name, sim_data in simulations.items():
-        tp = sim_data[-1, :]
-        if len(tp) == 0:
-            continue
-        metrics.append({
-            'Type': name.upper(),
-            '5% VaR': f"${np.percentile(tp, 5):.2f}",
-            '1% VaR': f"${np.percentile(tp, 1):.2f}",
-            'Expected Value': f"${tp.mean():.2f}",
-            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%"
-        })
-
-    st.table(pd.DataFrame(metrics))
 
 
 
