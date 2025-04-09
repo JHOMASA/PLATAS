@@ -569,35 +569,34 @@ def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: 
         mu = returns.mean()
         sigma = returns.std()
         last_price = data['Close'].iloc[-1]
-        
+
         # Generate random walks
         raw_simulations = np.zeros((days, n_simulations))
         raw_simulations[0] = last_price
-        
+
         for day in range(1, days):
             shock = np.random.normal(mu, sigma, n_simulations)
-            raw_simulations[day] = raw_simulations[day-1] * np.exp(shock)
-        
+            raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
+
         # Apply smoothing techniques
         window_size = min(20, days // 10)  # Adaptive window size
-        
-        # Simple Moving Average (fill NaN after smoothing)
+
+        # Simple Moving Average
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
             ma_series = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean()
-            ma_simulations[:,i] = ma_series.fillna(method = "ffill").fillna(method = "bfill")  # Fill NaN AFTER smoothing
-        
-       wma_simulations = np.zeros_like(raw_simulations)
-       weights = np.arange(1, window_size + 1)
-       weights = weights / weights.sum()
+            ma_simulations[:, i] = ma_series.fillna(method='ffill').fillna(method='bfill').values
 
-       for i in range(n_simulations):
+        # Weighted Moving Average
+        wma_simulations = np.zeros_like(raw_simulations)
+        weights = np.arange(1, window_size + 1)
+        weights = weights / weights.sum()
+
+        for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
             wma_series = series.rolling(window=window_size).apply(lambda x: np.dot(weights, x), raw=True)
             wma_simulations[:, i] = wma_series.fillna(method='ffill').fillna(method='bfill').values
-           
-        wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values
-        wma_simulations[:, i] = series.rolling(window=window_size).apply(lambda x: np.sum(weights * x))
+
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
