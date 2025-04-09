@@ -1405,6 +1405,19 @@ def main():
                         ax.plot(selected_data[:, i], alpha=0.3)
                     ax.set_title(f"{smoothing_method.upper()} Monte Carlo Simulations")
                     st.pyplot(fig)
+                    st.markdown("### 📊 Monte Carlo Summary Metrics")
+                    df_summary = pd.DataFrame([{
+                        "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
+                        "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
+                        "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
+                        "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
+                        "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
+                        "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
+                        "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
+                        "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
+                        "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
+                    }])
+                    st.dataframe(df_summary, use_container_width=True)
 
                 st.markdown("### 📉 Terminal Price Distribution")
                 terminal_prices = selected_data[-1, :]
