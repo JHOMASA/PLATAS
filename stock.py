@@ -881,6 +881,9 @@ def display_stock_analysis(stock_data, ticker):
         st.plotly_chart(fig3, use_container_width=True)
 
 
+# Add this at the top of your script with other configurations
+DEBUG_MODE = False  # Set to True when you need debugging
+
 def display_monte_carlo(simulations):
     st.subheader("Simulation Smoothing Options")
     smooth_type = st.radio("Select smoothing type", ["Raw", "Moving Average", "Weighted MA"], horizontal=True)
@@ -892,8 +895,10 @@ def display_monte_carlo(simulations):
     else:
         data = simulations['raw']
 
-    # Debug visualization option 1 - checkbox controlled
-    if st.checkbox("Show debug visualization (first 5 paths)"):
+    # Debug visualization (always shown if DEBUG_MODE is True)
+    if DEBUG_MODE or st.checkbox("Show debug visualization (first 5 paths)"):
+        st.markdown("### Debug View: First 5 Paths Comparison")
+        
         fig_debug = go.Figure()
         
         # Plot raw paths
@@ -915,7 +920,7 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'MA {i+1}',
                     line=dict(color='green', width=1)
-                ))
+                )
         
         # Plot WMA paths if available
         if 'wma' in simulations:
@@ -926,41 +931,18 @@ def display_monte_carlo(simulations):
                     mode='lines',
                     name=f'WMA {i+1}',
                     line=dict(color='red', width=1)
-                ))
+                )
         
         fig_debug.update_layout(
-            title="Debug View: First 5 Paths Comparison",
             xaxis_title="Days",
             yaxis_title="Price",
             legend=dict(orientation="h", yanchor="bottom", y=1.02)
         )
         st.plotly_chart(fig_debug, use_container_width=True)
 
-    # Debug visualization option 2 - global DEBUG_MODE flag
-    if DEBUG_MODE:  # Make sure DEBUG_MODE is defined at the top of your script
-        fig = go.Figure()
-        for i in range(min(5, simulations['raw'].shape[1])):
-            fig.add_trace(go.Scatter(
-                y=simulations['raw'][:, i], 
-                name=f'Raw {i}'
-            ))
-            if 'ma' in simulations:
-                fig.add_trace(go.Scatter(
-                    y=simulations['ma'][:, i],
-                    name=f'MA {i}'
-                ))
-            if 'wma' in simulations:
-                fig.add_trace(go.Scatter(
-                    y=simulations['wma'][:, i],
-                    name=f'WMA {i}'
-                ))
-        fig.update_layout(title='First 5 Paths Comparison')
-        st.plotly_chart(fig, use_container_width=True)
-
     if data.shape[1] == 0:
         st.warning(f"No data available for {smooth_type}. Try increasing simulation size or adjusting inputs.")
         return
-
 
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
