@@ -272,30 +272,6 @@ def get_yahoo_ratios(ticker: str, fmp_api_key: str = None) -> Dict[str, Any]:  #
         st.error(f"Error fetching ratios: {str(e)}")
         return None
 
-def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
-    """Enhanced ratio display with dynamic sector comparison"""
-    try:
-        if not ratios:
-            st.error("No ratio data available")
-            return
-            
-        # Get sector context
-        sector, industry, peers = get_sector_peers(ticker)
-        sector_avgs = get_sector_averages(sector)
-        
-        # Prepare display data
-        display_data = prepare_display_data(ratios)
-        
-        if not display_data:
-            st.error("No valid ratio data available for display")
-            return
-
-        # Create visualization with sector comparison
-        create_dynamic_chart(display_data, ticker, sector, sector_avgs)
-        show_metric_analysis(display_data, sector_avgs)
-    except Exception as e:
-        st.error(f"Error displaying ratios: {str(e)}")
-
 
 def prepare_display_data(ratios: Dict[str, Any]) -> Dict[str, float]:
     """Prepares and validates ratio data for display."""
