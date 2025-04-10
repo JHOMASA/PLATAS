@@ -1380,7 +1380,7 @@ def main():
                 tir_array = (terminal_prices - initial_prices) / initial_prices
                 st.markdown("### 📈 Simulated Price Paths")
                 fig1 = go.Figure()
-                for i in range(range(min(50, selected_data.shape[1])):
+                for i in  range(min(50, selected_data.shape[1])):
                     fig1.add_trace(go.Scatter(
                         X = np.arange(selected_data.shape[0]),
                         y = selected_data[:,i+],
