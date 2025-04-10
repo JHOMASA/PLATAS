@@ -1382,14 +1382,14 @@ def main():
                 fig1 = go.Figure()
                 for i in  range(min(50, selected_data.shape[1])):
                     fig1.add_trace(go.Scatter(
-                        X = np.arange(selected_data.shape[0]),
-                        y = selected_data[:,i],
+                        x = np.arange(selected_data.shape[0]),
+                        y = selected_data[:, i],
                         mode = "lines",
                         line = dict(width=1),
                         showlegend= False
                     ))
                 fig1.update_layout(
-                    title = f"{smoothing_method.upper()} Monte Carlo Simulation Paths",
+                    title = f"{smoothing_method.upper()}  Monte Carlo Simulation Paths",
                     xaxis_title = "Days",
                     yaxis_title = "Simulated Price")
                 st.plotly_chart(fig1, use_container_width=True)
