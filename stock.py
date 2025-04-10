@@ -1383,7 +1383,7 @@ def main():
                 for i in  range(min(50, selected_data.shape[1])):
                     fig1.add_trace(go.Scatter(
                         X = np.arange(selected_data.shape[0]),
-                        y = selected_data[:,i+],
+                        y = selected_data[:,i],
                         mode = "lines",
                         line = dict(width=1),
                         showlegend= False
