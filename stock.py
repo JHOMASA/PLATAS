@@ -32,8 +32,7 @@ from scipy.signal import savgol_filter
 # Configuration
 
 ALPHA_VANTAGE_API_KEY = "QDRRN1Y7K4EDJYT2"
-FINGPT_API_KEY = "AIzaTRDjNFU6WAx6FJ74zhm2vQqWyD5MsYKUcOk"  # Replace with actual key
-NEWS_API_KEY = "3f8e6bb1fb72490b835c800afcadd1aa"      # Replace with actual key
+
 
 st.set_page_config(layout="wide")
 st.title("📊 Advanced Stock Analysis Dashboard")
@@ -91,6 +90,9 @@ def get_stock_data(symbol: str, period: str = "1y") -> Tuple[pd.DataFrame, str]:
 def get_alpha_vantage_ratios(ticker: str) -> Dict[str, Optional[float]]:
     """Get ROE and ROA from Alpha Vantage API with proper typing"""
     ratios = {"ROE": None, "ROA": None}
+    if not ALPHA_VANTAGE_API_KEY:
+        st.warning("⚠️ Alpha Vantage API key is not set.")
+        return ratios
     try:
         url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={ALPHA_VANTAGE_API_KEY}"
         response = requests.get(url, timeout=10)
@@ -353,22 +355,7 @@ def create_dynamic_chart(display_data: Dict[str, float], ticker: str,
         height=max(400, len(display_data) * 60)  # Dynamic height
     )
     st.plotly_chart(fig, use_container_width=True)
-def get_alpha_vantage_ratios(ticker: str) -> Dict[str, Optional[float]]:
-    """Ensures proper decimal conversion from API"""
-    ratios = {"ROE": None, "ROA": None}
-    try:
-        # ... API call code ...
-        
-        # These values are already in percentage form from API (e.g., 15.25 means 15.25%)
-        # So we divide by 100 to convert to decimal (0.1525)
-        if "ReturnOnEquityTTM" in data:
-            ratios["ROE"] = safe_float(data["ReturnOnEquityTTM"], div_by=100)
-        if "ReturnOnAssetsTTM" in data:
-            ratios["ROA"] = safe_float(data["ReturnOnAssetsTTM"], div_by=100)
-            
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
-    return ratios
+
 
 def show_metric_analysis(display_data: Dict[str, float], sector_avgs: Dict[str, float]):
     """Displays detailed ratio analysis with correct percentage handling and enhanced visuals"""
