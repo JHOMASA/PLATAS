@@ -242,37 +242,38 @@ def get_cached_sector_averages(sector: str) -> Dict[str, float]:
     
     return DEFAULTS.get(sector, DEFAULTS['General'])
 
-def get_yahoo_ratios(ticker: str, fmp_api_key: str = None) -> Dict[str, Any]:  # Added fmp_api_key parameter
-    """Get financial ratios from Yahoo Finance"""
+def get_yahoo_ratios(ticker: str, fmp_api_key: str = None) -> Dict[str, Any]:
+    """Get financial ratios from Yahoo Finance, with Alpha Vantage fallback for ROE and ROA"""
     try:
         yf_ticker = yf.Ticker(ticker)
         info = yf_ticker.info
-        
-        if not info:    
+
+        if not info:
             st.error("No financial data available for this ticker")
             return None
-            
-        # Extract relevant ratios
+
+        # Extract Yahoo Finance ratios
         ratios = {
             'priceEarningsRatio': info.get('trailingPE'),
             'priceToBookRatio': info.get('priceToBook'),
             'debtEquityRatio': info.get('debtToEquity'),
             'currentRatio': info.get('currentRatio'),
-            'returnOnEquity': info.get('returnOnEquity'),  # Fixed typo in key
-            'returnOnAssets': info.get('returnOnAssets')
+            'returnOnEquity': None,
+            'returnOnAssets': None
         }
-        
-        # Add FMP fallback if needed
-        if ratios['returnOnEquity'] is None or ratios['returnOnAssets'] is None:
-            av_ratios = get_alpha_vantage_ratios(ticker)
-            if av_ratios:
-                ratios['returnOnEquity'] = ratios['returnOnEquity'] or av_ratios['returnOnEquity']
-                ratios['returnOnAssets'] = ratios['returnOnAssets'] or av_ratios['returnOnAssets']
-        
+
+        # Fallback to Alpha Vantage for ROE and ROA only
+        av_ratios = get_alpha_vantage_ratios(ticker)
+        if av_ratios:
+            ratios['returnOnEquity'] = av_ratios.get('ROE')
+            ratios['returnOnAssets'] = av_ratios.get('ROA')
+
         return {k: float(v) if v is not None else None for k, v in ratios.items()}
+
     except Exception as e:
         st.error(f"Error fetching ratios: {str(e)}")
         return None
+
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
     """Enhanced ratio display with dynamic sector comparison"""
