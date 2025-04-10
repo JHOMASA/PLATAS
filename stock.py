@@ -1417,7 +1417,7 @@ def main():
                      "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
                      "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
                  }])
-                  st.dataframe(df_summary, use_container_width=True)
+                 st.dataframe(df_summary, use_container_width=True)
 
                 else:
                   st.warning("No data available for selected smoothing method.")
