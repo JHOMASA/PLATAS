@@ -1375,7 +1375,7 @@ def main():
                  terminal_prices = selected_data[-1, :]
                  initial_prices = selected_data[0, :]
                  tir_array = (terminal_prices - initial_prices) / initial_prices
-
+                   
                  # Terminal Price Histogram
                  st.markdown("### 📉 Terminal Price Distribution")
                  fig2 = go.Figure()
@@ -1387,7 +1387,7 @@ def main():
                   bargap=0.05
                  )
                  st.plotly_chart(fig2, use_container_width=True)
-
+                   
                  # TIR Distribution Histogram
                  st.markdown("### 📈 Total Investment Return (TIR) Distribution")
                  fig3 = go.Figure()
@@ -1399,7 +1399,7 @@ def main():
                    bargap=0.05
                  )
                  st.plotly_chart(fig3, use_container_width=True)
-
+                   
                  # Summary Table
                  st.markdown("### 📊 Monte Carlo Summary Metrics")
                  df_summary = pd.DataFrame([{
@@ -1414,7 +1414,7 @@ def main():
                    "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
                  }])
                  st.dataframe(df_summary, use_container_width=True)
-
+                   
                else:
                   st.warning("No data available for selected smoothing method.")
             
@@ -1428,7 +1428,6 @@ def main():
                      terminal_prices = selected_data[-1, :]
                      initial_prices = selected_data[0, :]
                      tir_array = (terminal_prices - initial_prices) / initial_prices
-
                      # 📉 Histogram of Terminal Prices
                     fig2 = go.Figure()
                     fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
