@@ -29,11 +29,6 @@ from sklearn.preprocessing import MinMaxScaler
 import uuid
 from scipy.signal import savgol_filter
 
-# Configuration
-
-ALPHA_VANTAGE_API_KEY = "QDRRN1Y7K4EDJYT2"
-
-
 st.set_page_config(layout="wide")
 st.title("📊 Advanced Stock Analysis Dashboard")
 @lru_cache(maxsize=32)
@@ -90,9 +85,6 @@ def get_stock_data(symbol: str, period: str = "1y") -> Tuple[pd.DataFrame, str]:
 def get_alpha_vantage_ratios(ticker: str) -> Dict[str, Optional[float]]:
     """Get ROE and ROA from Alpha Vantage API with proper typing"""
     ratios = {"ROE": None, "ROA": None}
-    if not ALPHA_VANTAGE_API_KEY:
-        st.warning("⚠️ Alpha Vantage API key is not set.")
-        return ratios
     try:
         url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={ALPHA_VANTAGE_API_KEY}"
         response = requests.get(url, timeout=10)
@@ -242,38 +234,37 @@ def get_cached_sector_averages(sector: str) -> Dict[str, float]:
     
     return DEFAULTS.get(sector, DEFAULTS['General'])
 
-def get_yahoo_ratios(ticker: str, fmp_api_key: str = None) -> Dict[str, Any]:
-    """Get financial ratios from Yahoo Finance, with Alpha Vantage fallback for ROE and ROA"""
+def get_yahoo_ratios(ticker: str, fmp_api_key: str = None) -> Dict[str, Any]:  # Added fmp_api_key parameter
+    """Get financial ratios from Yahoo Finance"""
     try:
         yf_ticker = yf.Ticker(ticker)
         info = yf_ticker.info
-
-        if not info:
+        
+        if not info:    
             st.error("No financial data available for this ticker")
             return None
-
-        # Extract Yahoo Finance ratios
+            
+        # Extract relevant ratios
         ratios = {
             'priceEarningsRatio': info.get('trailingPE'),
             'priceToBookRatio': info.get('priceToBook'),
             'debtEquityRatio': info.get('debtToEquity'),
             'currentRatio': info.get('currentRatio'),
-            'returnOnEquity': None,
-            'returnOnAssets': None
+            'returnOnEquity': info.get('returnOnEquity'),  # Fixed typo in key
+            'returnOnAssets': info.get('returnOnAssets')
         }
-
-        # Fallback to Alpha Vantage for ROE and ROA only
-        av_ratios = get_alpha_vantage_ratios(ticker)
-        if av_ratios:
-            ratios['returnOnEquity'] = av_ratios.get('ROE')
-            ratios['returnOnAssets'] = av_ratios.get('ROA')
-
+        
+        # Add FMP fallback if needed
+        if ratios['returnOnEquity'] is None or ratios['returnOnAssets'] is None:
+            av_ratios = get_alpha_vantage_ratios(ticker)
+            if av_ratios:
+                ratios['returnOnEquity'] = ratios['returnOnEquity'] or av_ratios['returnOnEquity']
+                ratios['returnOnAssets'] = ratios['returnOnAssets'] or av_ratios['returnOnAssets']
+        
         return {k: float(v) if v is not None else None for k, v in ratios.items()}
-
     except Exception as e:
         st.error(f"Error fetching ratios: {str(e)}")
         return None
-
 
 def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
     """Enhanced ratio display with dynamic sector comparison"""
@@ -298,6 +289,7 @@ def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
         show_metric_analysis(display_data, sector_avgs)
     except Exception as e:
         st.error(f"Error displaying ratios: {str(e)}")
+
 
 def prepare_display_data(ratios: Dict[str, Any]) -> Dict[str, float]:
     """Prepares and validates ratio data for display."""
@@ -356,7 +348,22 @@ def create_dynamic_chart(display_data: Dict[str, float], ticker: str,
         height=max(400, len(display_data) * 60)  # Dynamic height
     )
     st.plotly_chart(fig, use_container_width=True)
-
+def get_alpha_vantage_ratios(ticker: str) -> Dict[str, Optional[float]]:
+    """Ensures proper decimal conversion from API"""
+    ratios = {"ROE": None, "ROA": None}
+    try:
+        # ... API call code ...
+        
+        # These values are already in percentage form from API (e.g., 15.25 means 15.25%)
+        # So we divide by 100 to convert to decimal (0.1525)
+        if "ReturnOnEquityTTM" in data:
+            ratios["ROE"] = safe_float(data["ReturnOnEquityTTM"], div_by=100)
+        if "ReturnOnAssetsTTM" in data:
+            ratios["ROA"] = safe_float(data["ReturnOnAssetsTTM"], div_by=100)
+            
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
+    return ratios
 
 def show_metric_analysis(display_data: Dict[str, float], sector_avgs: Dict[str, float]):
     """Displays detailed ratio analysis with correct percentage handling and enhanced visuals"""
@@ -552,76 +559,48 @@ def calculate_risk_metrics(data: pd.DataFrame) -> Dict[str, Any]:
 
 def monte_carlo_simulation(data: pd.DataFrame, n_simulations: int = 1000, days: int = 180) -> dict:
     try:
+        # Calculate daily returns
         returns = np.log(1 + data['Close'].pct_change())
         mu = returns.mean()
         sigma = returns.std()
         last_price = data['Close'].iloc[-1]
-
-        # Initialize simulation matrix
+        
+        # Generate random walks
         raw_simulations = np.zeros((days, n_simulations))
-        raw_simulations[0] = last_price * np.ones(n_simulations)  # ✅ Fix shape issue
-
+        raw_simulations[0] = last_price
+        
         for day in range(1, days):
             shock = np.random.normal(mu, sigma, n_simulations)
-            raw_simulations[day] = raw_simulations[day - 1] * np.exp(shock)
-
-        window_size = max(5, min(20, days // 5))
-
-        # === Simple Moving Average ===
+            raw_simulations[day] = raw_simulations[day-1] * np.exp(shock)
+        
+        # Apply smoothing techniques
+        window_size = min(20, days//10)  # Adaptive window size
+        
+        # Simple Moving Average (fill NaN after smoothing)
         ma_simulations = np.zeros_like(raw_simulations)
         for i in range(n_simulations):
-            series = pd.Series(raw_simulations[:, i])
-            ma_series = series.rolling(window=window_size, min_periods=1).mean()
-            ma_simulations[:, i] = ma_series.bfill().ffill().values
-
-        # === Weighted Moving Average ===
+            ma_simulations[:, i] = pd.Series(raw_simulations[:, i]).rolling(window=window_size).mean().values
+        ma_simulations = pd.DataFrame(ma_simulations).fillna(method='ffill').values  # Fill NaN AFTER smoothing
+        
+        # Weighted Moving Average (fill NaN after smoothing)
         wma_simulations = np.zeros_like(raw_simulations)
-        weights = np.arange(1, window_size + 1)
+        weights = np.arange(1, window_size+1)
         weights = weights / weights.sum()
+        
         for i in range(n_simulations):
             series = pd.Series(raw_simulations[:, i])
-            wma_series = series.rolling(window=window_size, min_periods=1).apply(
-                lambda x: np.dot(weights[-len(x):], x), raw=True
-            )
-            wma_simulations[:, i] = wma_series.bfill().ffill().values
-
-        # === Exponential Moving Average ===
-        ema_simulations = np.zeros_like(raw_simulations)
-        for i in range(n_simulations):
-            series = pd.Series(raw_simulations[:, i])
-            ema_series = series.ewm(span=window_size, adjust=False).mean()
-            ema_simulations[:, i] = ema_series.bfill().ffill().values
-
-        # === Savitzky-Golay Filter ===
-        savgol_simulations = np.zeros_like(raw_simulations)
-        for i in range(n_simulations):
-            series = raw_simulations[:, i]
-            valid_window = window_size if window_size % 2 != 0 else window_size + 1
-            valid_window = min(valid_window, days - 1 if (days - 1) % 2 != 0 else days - 2)
-            if valid_window >= 3 and valid_window < days:
-                savgol_simulations[:, i] = savgol_filter(series, window_length=valid_window, polyorder=2)
-            else:
-                savgol_simulations[:, i] = series
-
-        # === Cumulative Moving Average ===
-        cma_simulations = np.zeros_like(raw_simulations)
-        for i in range(n_simulations):
-            series = pd.Series(raw_simulations[:, i])
-            cma_series = series.expanding().mean()
-            cma_simulations[:, i] = cma_series.bfill().ffill().values
-
+            wma_simulations[:, i] = series.rolling(window=window_size)\
+                                         .apply(lambda x: np.sum(weights * x))
+        wma_simulations = pd.DataFrame(wma_simulations).fillna(method='ffill').values  # Fill NaN AFTER smoothing
+        
         return {
             'raw': raw_simulations,
             'ma': ma_simulations,
-            'wma': wma_simulations,
-            'ema': ema_simulations,
-            'savgol': savgol_simulations,
-            'cma': cma_simulations
+            'wma': wma_simulations
         }
-
+        
     except Exception as e:
         raise Exception(f"Enhanced Monte Carlo simulation failed: {str(e)}")
-
 def train_holt_winters(data: pd.DataFrame, seasonal_periods: int) -> Tuple[object, str]:
     """Train Holt-Winters forecasting model"""
     try:
@@ -886,29 +865,23 @@ def display_stock_analysis(stock_data, ticker):
         st.plotly_chart(fig3, use_container_width=True)
 
 
-def display_monte_carlo(simulations: dict, smoothing_method: str):
-    if smoothing_method == "Raw":
-        data = simulations["raw"]
-    elif smoothing_method == "Moving Average":
-        data = simulations["ma"]
-    elif smoothing_method == "Weighted MA":
-        data = simulations["wma"]
-    elif smoothing_method == "Exponential MA":
-        data = simulations["ema"]
-    elif smoothing_method == "Savitzky-Golay":
-        data = simulations["savgol"]
-    elif smoothing_method == "Cumulative MA":
-        data = simulations["cma"]
+def display_monte_carlo(simulations):
+    """Enhanced display with smoothing options"""
+    st.subheader("Simulation Smoothing Options")
+    smooth_type = st.radio("Select smoothing type", 
+                          ["Raw", "Moving Average", "Weighted MA"],
+                          horizontal=True)
+    
+    # Select which simulations to show
+    if smooth_type == "Moving Average":
+        data = simulations['ma']
+    elif smooth_type == "Weighted MA":
+        data = simulations['wma']
     else:
-        st.warning("Unknown smoothing method selected.")
-        return
-
-    st.caption("ℹ️ Simulation Diagnostic")
-    st.write("Shape:", data.shape)
-    st.write("Sample values (first 5 days, first simulation):", data[:5, 0])
-
+        data = simulations['raw']
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
         # Simulation Paths
         fig1 = go.Figure()
@@ -920,69 +893,166 @@ def display_monte_carlo(simulations: dict, smoothing_method: str):
                 line=dict(width=1),
                 showlegend=False
             ))
-        fig1.update_layout(
-            title=f"Monte Carlo Simulation Paths ({smoothing_method})",
-            xaxis_title="Days",
-            yaxis_title="Price"
-        )
+        fig1.update_layout(title=f"Monte Carlo Simulation Paths ({smooth_type})", 
+                         xaxis_title="Days", 
+                         yaxis_title="Price")
         st.plotly_chart(fig1, use_container_width=True)
-
+    
     with col2:
         # Terminal Distribution
         terminal_prices = data[-1, :]
         fig2 = go.Figure()
         fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
-        fig2.update_layout(
-            title=f"Terminal Price Distribution ({smoothing_method})",
-            xaxis_title="Price",
-            yaxis_title="Frequency"
-        )
+        fig2.update_layout(title=f"Terminal Price Distribution ({smooth_type})",
+                          xaxis_title="Price",
+                          yaxis_title="Frequency")
         st.plotly_chart(fig2, use_container_width=True)
-    # Risk Metrics Table
-    st.markdown("### 📊 Monte Carlo Summary Metrics")
-    summary_df = pd.DataFrame([{
-        "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
-        "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
-        "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
-        "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
-        "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
-        "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
-        "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
-        "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
-        "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
-    }])
-    st.dataframe(summary_df, use_container_width=True)
-    st.markdown("### 📋 Method Comparison: Risk Metrics (All Smoothing Types)")
-    comparison = []
+    
+    # Risk Metrics Comparison
+    st.subheader("Risk Metrics Comparison")
+    
+    metrics = []
     for name, sim_data in simulations.items():
-        if sim_data is None or sim_data.shape[1] == 0:
-            continue
         tp = sim_data[-1, :]
-        ip = sim_data[0, :]
-        tir = (tp - ip) / ip
-        volatility = tp.std() / tp.mean() * 100 if tp.mean() != 0 else np.nan
-
-        comparison.append({
-            "Smoothing Type": name.upper(),
-            "Expected Value ($)": f"{tp.mean():.2f}",
-            "Volatility (%)": f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
-            "5% VaR ($)": f"{np.percentile(tp, 5):.2f}",
-            "1% VaR ($)": f"{np.percentile(tp, 1):.2f}",
-            "Avg TIR (%)": f"{tir.mean() * 100:.2f}"
+        metrics.append({
+            'Type': name.upper(),
+            '5% VaR': f"${np.percentile(tp, 5):.2f}",
+            '1% VaR': f"${np.percentile(tp, 1):.2f}",
+            'Expected Value': f"${tp.mean():.2f}",
+            'Volatility': f"{tp.std()/tp.mean()*100:.2f}%"
         })
-
-    if comparison:
-        st.dataframe(pd.DataFrame(comparison), use_container_width=True)
-    else:
-        st.info("No valid data for smoothing method comparison.")
-    csv = summary_df.to_csv(index=False).encode('utf-8')
-    st.download_button("📥 Download Summary CSV", data=csv, file_name="monte_carlo_summary.csv", mime="text/csv")
+    
+    st.table(pd.DataFrame(metrics))
 
 
-    if metrics:
-        st.table(pd.DataFrame(metrics))
-    else:
-        st.warning("No valid simulation data for risk metrics.")
+
+def display_financial_ratios(ratios: Dict[str, Any], ticker: str):
+    """
+    Displays financial ratios from FMP API data
+    Args:
+        ratios: Dictionary from FMP's /v3/ratios endpoint
+        ticker: Stock ticker symbol for display purposes
+    """
+    try:
+        if not ratios:
+            st.error("No ratio data available")
+            return
+        if 'go' not in globals():
+            raise ImportError("Plotly graph_objects not imported properly")
+            
+        # Create the figure safely
+        fig = go.Figure()  # This will now work
+
+        # FMP field to display name mapping
+        ratio_map = {
+            'priceEarningsRatio': 'P/E Ratio',
+            'priceToBookRatio': 'P/B Ratio',
+            'debtEquityRatio': 'Debt/Equity',
+            'currentRatio': 'Current Ratio',
+            'returnOnEquity': 'ROE',
+            'returnOnAssets': 'ROA'
+        }
+
+        # Mock sector averages (replace with actual FMP sector data)
+        sector_avg = {
+            'priceEarningsRatio': 15.2,
+            'priceToBookRatio': 2.8,
+            'debtEquityRatio': 0.85,
+            'currentRatio': 1.5,
+            'returnOnEquity': 0.15,
+            'returnOnAssets': 0.075
+        }
+
+        # Prepare display data
+        display_data = {}
+        for api_key, display_name in ratio_map.items():
+            if api_key in ratios and ratios[api_key] is not None:
+                # Convert decimals to percentages for ROE/ROA
+                if display_name in ['ROE', 'ROA']:
+                    display_data[display_name] = f"{ratios[api_key] * 100:.2f}%"
+                else:
+                    display_data[display_name] = f"{ratios[api_key]:.2f}"
+
+        if not display_data:
+            st.error("No valid ratio data available for display")
+            return
+
+        # Create visualization
+        st.subheader(f"Financial Ratios for {ticker}")
+        
+        # Bar chart
+        fig = go.Figure()
+        
+        # Add company bars
+        fig.add_trace(go.Bar(
+            x=list(display_data.keys()),
+            y=[float(v.strip('%')) if '%' in v else float(v) for v in display_data.values()],
+            name=ticker,
+            text=list(display_data.values()),
+            textposition='auto'
+        ))
+        
+        # Add sector average bars (only for available metrics)
+        sector_x = []
+        sector_y = []
+        for display_name in display_data.keys():
+            api_key = next(k for k, v in ratio_map.items() if v == display_name)
+            if api_key in sector_avg:
+                sector_x.append(display_name)
+                if display_name in ['ROE', 'ROA']:
+                    sector_y.append(sector_avg[api_key] * 1)
+                else:
+                    sector_y.append(sector_avg[api_key])
+        
+        fig.add_trace(go.Bar(
+            x=sector_x,
+            y=sector_y,
+            name='Sector Average',
+            text=[f"{y:.1f}{'%' if x in ['ROE', 'ROA'] else ''}" for x, y in zip(sector_x, sector_y)],
+            textposition='auto'
+        ))
+        
+        fig.update_layout(
+            barmode='group',
+            title=f"{ticker} vs Sector Averages",
+            yaxis_title="Value"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Metric analysis
+        st.subheader("Metric Analysis")
+        
+        cols = st.columns(2)
+        with cols[0]:
+            if 'P/E Ratio' in display_data:
+                pe = float(display_data['P/E Ratio'])
+                st.metric("P/E Ratio", 
+                         display_data['P/E Ratio'],
+                         f"{'High' if pe > 20 else 'Normal' if pe > 10 else 'Low'} vs market")
+            
+            if 'Current Ratio' in display_data:
+                cr = float(display_data['Current Ratio'])
+                st.metric("Current Ratio", 
+                         display_data['Current Ratio'],
+                         "Strong" if cr > 2 else "Adequate" if cr > 1 else "Weak")
+        
+        with cols[1]:
+            if 'Debt/Equity' in display_data:
+                de = float(display_data['Debt/Equity'])
+                st.metric("Debt/Equity", 
+                         display_data['Debt/Equity'],
+                         "High" if de > 1 else "Moderate" if de > 0.5 else "Low")
+            
+            if 'ROE' in display_data:
+                roe = float(display_data['ROE'].strip('%'))
+                st.metric("Return on Equity", 
+                         display_data['ROE'],
+                         "Strong" if roe > 15 else "Average" if roe > 8 else "Weak")
+
+    except Exception as e:
+        st.error(f"Error displaying ratios: {str(e)}")
+
+
 
 
 def display_predictions(historical_data, predictions, model_name):
@@ -1042,110 +1112,6 @@ def display_predictions(historical_data, predictions, model_name):
         mae = mean_absolute_error(test, predictions[:30])
         st.metric("Mean Absolute Error (30-day backtest)", f"${mae:.2f}")
 
-if 'simulations' not in st.session_state:
-    st.session_state.simulations = None
-def show_simulation_diagnostics(data: np.ndarray, simulations: dict, smooth_type: str):
-    st.caption("ℹ️ Simulation Diagnostic")
-    st.write("Shape:", data.shape)
-    st.write("Sample values (first 5 days, first simulation):", data[:5, 0])
-
-    col1, col2 = st.columns(2)
-
-    # Simulation Paths
-    with col1:
-        fig1 = go.Figure()
-        for i in range(min(20, data.shape[1])):
-            fig1.add_trace(go.Scatter(
-                x=np.arange(data.shape[0]),
-                y=data[:, i],
-                mode='lines',
-                line=dict(width=1),
-                showlegend=False
-            ))
-        fig1.update_layout(
-            title=f"Monte Carlo Simulation Paths ({smooth_type})",
-            xaxis_title="Days",
-            yaxis_title="Price"
-        )
-        st.plotly_chart(fig1, use_container_width=True)
-
-    # Terminal Distribution
-    with col2:
-        terminal_prices = data[-1, :]
-        fig2 = go.Figure()
-        fig2.add_trace(go.Histogram(x=terminal_prices, name="Outcomes"))
-        fig2.update_layout(
-            title=f"Terminal Price Distribution ({smooth_type})",
-            xaxis_title="Price",
-            yaxis_title="Frequency"
-        )
-        st.plotly_chart(fig2, use_container_width=True)
-def calculate_risk_metrics(data: pd.DataFrame) -> dict:
-    try:
-        if 'Close' not in data.columns or data.empty:
-            return {}
-
-        returns = np.log(data['Close']).diff().dropna()
-        volatility = returns.std() * np.sqrt(252)
-
-        cumulative = (1 + returns).cumprod()
-        peak = cumulative.cummax()
-        drawdown = (cumulative - peak) / peak
-        max_drawdown = drawdown.min()
-
-        sharpe = returns.mean() / returns.std() * np.sqrt(252) if returns.std() != 0 else 0
-
-        return {
-            "volatility": volatility,
-            "maximumDrawdown": max_drawdown,
-            "sharpeRatio": sharpe
-        }
-
-    except Exception as e:
-        print(f"Risk metric calculation failed: {str(e)}")
-        return {}
-def display_var_risk_metrics_with_historical(simulations: dict, historical_data: pd.DataFrame):
-    st.subheader("📊 Risk Metrics Comparison (Simulated vs. Historical)")
-
-    metrics = []
-
-    # Historical TIR
-    if 'Close' in historical_data.columns and len(historical_data) > 1:
-        hist_tir = (historical_data['Close'].iloc[-1] - historical_data['Close'].iloc[0]) / historical_data['Close'].iloc[0]
-    else:
-        hist_tir = np.nan
-
-    for name, sim_data in simulations.items():
-        if sim_data is None or sim_data.shape[1] == 0:
-            continue
-
-        tp = sim_data[-1, :]  # terminal prices
-        ip = sim_data[0, :]   # initial prices
-
-        tir_array = (tp - ip) / ip
-        expected_value = tp.mean()
-        std_dev = tp.std()
-        volatility = (std_dev / expected_value) * 100 if expected_value != 0 else np.nan
-        tir_mean = tir_array.mean()
-
-        metrics.append({
-            'Smoothing Type': name.upper(),
-            'Expected Value ($)': f"{expected_value:.2f}",
-            'Volatility (%)': f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
-            '5% VaR ($)': f"{np.percentile(tp, 5):.2f}",
-            '1% VaR ($)': f"{np.percentile(tp, 1):.2f}",
-            'Simulated TIR (%)': f"{tir_mean * 100:.2f}",
-            'Historical TIR (%)': f"{hist_tir * 100:.2f}" if not np.isnan(hist_tir) else "N/A",
-            'Min Price ($)': f"{tp.min():.2f}",
-            'Max Price ($)': f"{tp.max():.2f}"
-        })
-
-    if metrics:
-        df_metrics = pd.DataFrame(metrics)
-        st.dataframe(df_metrics, use_container_width=True)
-    else:
-        st.warning("No valid simulation data for risk metrics.")
-
 # Updated main app structure
 def main():
     # All main() content indented 4 spaces
@@ -1185,114 +1151,23 @@ def main():
         st.error(f"Unexpected error during data fetch: {str(e)}")
         return
     
+    # Analysis Sections
     try:
-      if analysis_type == "Stock Analysis":
-        display_stock_analysis(data, ticker)
-
-      elif analysis_type == "Monte Carlo":
-        st.header("🎲 Monte Carlo Simulation")
-
-        # Simulation Parameters
-        n_simulations = st.slider("Number of Simulations", 100, 5000, 1000)
-        time_horizon = st.slider("Time Horizon (days)", 30, 365, 180)
-
-        # Run Simulation
-        if st.button("Run Simulation"):
-            try:
-                simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
-                st.session_state.simulations = simulations
-                st.success("✅ Simulation completed!")
-
-                # Diagnostics
-                st.subheader("🧪 Simulation Output Check")
-                for key in ['raw', 'ma', 'wma', 'ema', 'savgol', 'cma']:
-                    arr = simulations.get(key)
-                    if arr is None:
-                        st.error(f"❌ Key '{key}' is missing from simulation output!")
-                    else:
-                        st.success(
-                            f"✅ {key.upper()} → shape: {arr.shape}, NaNs: {np.isnan(arr).sum()}, Zeros: {np.sum(arr == 0)}"
-                        )
-
-            except Exception as e:
-                st.error(f"Simulation failed: {str(e)}")
-
-        # Visualization and Metrics
-        if st.session_state.simulations:
-            st.subheader("📊 Simulation Visualization")
-
-            smoothing_method = st.selectbox(
-                "Select smoothing method",
-                ["raw", "ma", "wma", "ema", "savgol", "cma"],
-                key="sim_smoothing_tab"
-            )
-
-            selected_data = st.session_state.simulations.get(smoothing_method)
-
-            if selected_data is not None:
-                terminal_prices = selected_data[-1, :]
-                initial_prices = selected_data[0, :]
-                tir_array = (terminal_prices - initial_prices) / initial_prices
-                st.markdown("### 📈 Simulated Price Paths")
-                fig1 = go.Figure()
-                for i in  range(min(50, selected_data.shape[1])):
-                    fig1.add_trace(go.Scatter(
-                        x = np.arange(selected_data.shape[0]),
-                        y = selected_data[:, i],
-                        mode = "lines",
-                        line = dict(width=1),
-                        showlegend= False
-                    ))
-                fig1.update_layout(
-                    title = f"{smoothing_method.upper()}  Monte Carlo Simulation Paths",
-                    xaxis_title = "Days",
-                    yaxis_title = "Simulated Price")
-                st.plotly_chart(fig1, use_container_width=True)
-
-                # Terminal Price Histogram
-                st.markdown("### 📉 Terminal Price Distribution")
-                fig2 = go.Figure()
-                fig2.add_trace(go.Histogram(x=terminal_prices, name="Terminal Prices"))
-                fig2.update_layout(
-                    title=f"Terminal Price Distribution ({smoothing_method.upper()})",
-                    xaxis_title="Price",
-                    yaxis_title="Frequency",
-                    bargap=0.05
-                )
-                st.plotly_chart(fig2, use_container_width=True)
-
-                # TIR Distribution Histogram
-                st.markdown("### 📈 Total Investment Return (TIR) Distribution")
-                fig3 = go.Figure()
-                fig3.add_trace(go.Histogram(x=tir_array * 100, name="TIR (%)"))
-                fig3.update_layout(
-                    xaxis_title="TIR (%)",
-                    yaxis_title="Frequency",
-                    title="Distribution of TIR Across Simulations",
-                    bargap=0.05
-                )
-                st.plotly_chart(fig3, use_container_width=True)
-
-                # Summary Table
-                st.markdown("### 📊 Monte Carlo Summary Metrics")
-                df_summary = pd.DataFrame([{
-                    "Average Terminal Price ($)": f"{terminal_prices.mean():.2f}",
-                    "Min Terminal Price ($)": f"{terminal_prices.min():.2f}",
-                    "Max Terminal Price ($)": f"{terminal_prices.max():.2f}",
-                    "5% VaR ($)": f"{np.percentile(terminal_prices, 5):.2f}",
-                    "1% VaR ($)": f"{np.percentile(terminal_prices, 1):.2f}",
-                    "Average TIR (%)": f"{tir_array.mean() * 100:.2f}",
-                    "Worst TIR (%)": f"{tir_array.min() * 100:.2f}",
-                    "Best TIR (%)": f"{tir_array.max() * 100:.2f}",
-                    "% Positive Returns": f"{np.mean(tir_array > 0) * 100:.2f}%"
-                }])
-                st.dataframe(df_summary, use_container_width=True)
-
-            else:
-                st.warning("No data available for selected smoothing method.")
-
-    
-                 
+        if analysis_type == "Stock Analysis":
+            display_stock_analysis(data, ticker)
+            
+        elif analysis_type == "Monte Carlo":
+            st.header("🎲 Monte Carlo Simulation")
+            n_simulations = st.slider("Number of Simulations", 100, 5000, 1000)
+            time_horizon = st.slider("Time Horizon (days)", 30, 365, 180)
+            
+            if st.button("Run Simulation"):
+                try:
+                    simulations = monte_carlo_simulation(data, n_simulations, time_horizon)
+                    display_monte_carlo(simulations)
+                except Exception as e:
+                    st.error(f"Simulation failed: {str(e)}")
+        
         elif analysis_type == "Financial Ratios":
             st.header("📈 Financial Ratios Analysis")
 
@@ -1428,49 +1303,6 @@ def main():
                                         margin=dict(t=30)
                                     )
                                     st.plotly_chart(fig, use_container_width=True)
-
-                            if 'simulations' in st.session_state and st.session_state.simulations:
-                                st.markdown("### 📐 Simulated vs Historical Risk Metrics Table")
-
-                                metrics = []
-
-                                # Historical TIR
-                                if 'Close' in data.columns and len(data) > 1:
-                                    hist_tir = (data['Close'].iloc[-1] - data['Close'].iloc[0]) / data['Close'].iloc[0]
-                                else:
-                                    hist_tir = np.nan
-
-                                for name, sim_data in st.session_state.simulations.items():
-                                    if sim_data is None or sim_data.shape[1] == 0:
-                                        continue
-
-                                    tp = sim_data[-1, :]
-                                    ip = sim_data[0, :]
-
-                                    tir_array = (tp - ip) / ip
-                                    expected_value = tp.mean()
-                                    std_dev = tp.std()
-                                    volatility = (std_dev / expected_value) * 100 if expected_value != 0 else np.nan
-                                    tir_mean = tir_array.mean()
-
-                                    metrics.append({
-                                        'Smoothing Type': name.upper(),
-                                        'Expected Value ($)': f"{expected_value:.2f}",
-                                        'Volatility (%)': f"{volatility:.2f}" if not np.isnan(volatility) else "N/A",
-                                        '5% VaR ($)': f"{np.percentile(tp, 5):.2f}",
-                                        '1% VaR ($)': f"{np.percentile(tp, 1):.2f}",
-                                        'Simulated TIR (%)': f"{tir_mean * 100:.2f}",
-                                        'Historical TIR (%)': f"{hist_tir * 100:.2f}" if not np.isnan(hist_tir) else "N/A",
-                                        'Min Price ($)': f"{tp.min():.2f}",
-                                        'Max Price ($)': f"{tp.max():.2f}"
-                                    })
-
-                                if metrics:
-                                    df_metrics = pd.DataFrame(metrics)
-                                    st.dataframe(df_metrics, use_container_width=True)
-                                else:
-                                    st.info("No simulation output available for risk table.")
-                        
                         else:
                             st.warning("Could not calculate risk metrics")
     
