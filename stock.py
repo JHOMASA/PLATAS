@@ -1378,6 +1378,21 @@ def main():
                 terminal_prices = selected_data[-1, :]
                 initial_prices = selected_data[0, :]
                 tir_array = (terminal_prices - initial_prices) / initial_prices
+                st.markdown("### 📈 Simulated Price Paths")
+                fig1 = go.Figure()
+                for i in range(range(min(50, selected_data.shape[1])):
+                    fig1.add_trace(go.Scatter(
+                        X = np.arange(selected_data.shape[0]),
+                        y = selected_data[:,i+],
+                        mode = "lines",
+                        line = dict(width=1),
+                        showlegend= False
+                    ))
+                fig1.update_layout(
+                    title = f"{smoothing_method.upper()} Monte Carlo Simulation Paths",
+                    xaxis_title = "Days",
+                    yaxis_title = "Simulated Price")
+                st.plotly_chart(fig1, use_container_width=True)
 
                 # Terminal Price Histogram
                 st.markdown("### 📉 Terminal Price Distribution")
